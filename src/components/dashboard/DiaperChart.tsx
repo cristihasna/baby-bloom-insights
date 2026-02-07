@@ -21,8 +21,8 @@ export function DiaperChart({ data }: DiaperChartProps) {
   const chartData = useMemo(() => {
     return data.map((d) => ({
       date: format(parseISO(d.date), 'MMM d'),
-      wet: d.wetDiaperChanges,
-      dirty: d.dirtyDiaperChanges,
+      wet: d.wetDiapers.length,
+      dirty: d.dirtyDiapers.length,
     }));
   }, [data]);
 

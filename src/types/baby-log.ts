@@ -1,21 +1,24 @@
 export interface FeedingSession {
-  startTime: string; // HH:MM format
-  endTime: string;   // HH:MM format
-  durationMinutes: number;
+  startTime: string; // YYYY-MM-DDTHH:mm local time
+  endTime: string; // YYYY-MM-DDTHH:mm local time
 }
 
 export interface NapSession {
-  startTime: string; // HH:MM format
-  endTime: string;   // HH:MM format
-  durationMinutes: number;
+  startTime: string; // YYYY-MM-DDTHH:mm local time
+  endTime: string; // YYYY-MM-DDTHH:mm local time
+}
+
+export interface Comment {
+  time: string; // YYYY-MM-DDTHH:mm local time
+  text: string;
 }
 
 export interface DaySummary {
   date: string; // YYYY-MM-DD format
   totalSleepTime: number; // minutes
   totalFeedingTime: number; // minutes
-  wetDiaperChanges: number;
-  dirtyDiaperChanges: number;
+  wetDiapers: string[]; // YYYY-MM-DDTHH:mm local time
+  dirtyDiapers: string[]; // YYYY-MM-DDTHH:mm local time
   totalNightSleepTime: number; // minutes (19:00-07:00)
   totalDaySleepTime: number; // minutes (07:00-19:00)
   napSessions: number;
@@ -25,7 +28,7 @@ export interface DaySummary {
   totalNightWakeUps: number; // wake-ups between 19:00-07:00
   feedings: FeedingSession[];
   naps: NapSession[];
-  comments: string[]; // any comments or notes for the day
+  comments: Comment[]; // any comments or notes for the day
   weight?: number; // grams (if mentioned during the day)
 }
 
@@ -42,4 +45,9 @@ export interface DateRange {
   preset: 'week' | '2weeks' | 'month' | 'all' | 'custom';
 }
 
-export type OverlayType = 'naps' | 'feedings' | 'wetDiapers' | 'dirtyDiapers';
+export type OverlayType =
+  | 'naps'
+  | 'feedings'
+  | 'wetDiapers'
+  | 'dirtyDiapers'
+  | 'comments';

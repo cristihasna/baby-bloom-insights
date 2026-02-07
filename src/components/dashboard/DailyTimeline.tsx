@@ -1,9 +1,13 @@
 import { useMemo } from 'react';
-import { format, differenceInWeeks, parseISO } from 'date-fns';
+import { differenceInMinutes, differenceInWeeks, format, parseISO } from 'date-fns';
 import { DaySummary, OverlayType } from '@/types/baby-log';
-import { timeToMinutes } from '@/lib/mock-data';
 import { cn } from '@/lib/utils';
-import { Droplets, CircleDot } from 'lucide-react';
+import { Droplets, CircleDot, MessageCircle } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 
 interface DailyTimelineProps {
   data: DaySummary[];
@@ -13,8 +17,8 @@ interface DailyTimelineProps {
   activeOverlays: OverlayType[];
 }
 
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const HOUR_HEIGHT = 24; // pixels per hour
+const DAY_MINUTES = 24 * 60;
 
 export function DailyTimeline({
   data,
@@ -31,11 +35,60 @@ export function DailyTimeline({
     };
   }, [birthDate]);
 
+  const { extraHoursBefore, extraHoursAfter } = useMemo(() => {
+    let maxBefore = 0;
+    let maxAfter = 0;
+
+    data.forEach((day) => {
+      const dayStart = parseISO(`${day.date}T00:00`);
+      const events = [...day.naps, ...day.feedings];
+
+      events.forEach((event) => {
+        const start = parseISO(event.startTime);
+        const end = parseISO(event.endTime);
+        const startOffset = differenceInMinutes(start, dayStart);
+        const endOffset = differenceInMinutes(end, dayStart);
+
+        if (endOffset > DAY_MINUTES) {
+          const minutesBefore = DAY_MINUTES - startOffset;
+          const minutesAfter = endOffset - DAY_MINUTES;
+          maxBefore = Math.max(maxBefore, Math.max(0, minutesBefore));
+          maxAfter = Math.max(maxAfter, Math.max(0, minutesAfter));
+        }
+      });
+    });
+
+    return {
+      extraHoursBefore: Math.max(2, Math.ceil(maxBefore / 60)),
+      extraHoursAfter: Math.max(2, Math.ceil(maxAfter / 60)),
+    };
+  }, [data]);
+
+  const hours = useMemo(() => {
+    const total = 24 + extraHoursBefore + extraHoursAfter;
+    return Array.from({ length: total }, (_, i) => i - extraHoursBefore);
+  }, [extraHoursBefore, extraHoursAfter]);
+
+  const normalizeHour = (hour: number) => ((hour % 24) + 24) % 24;
+
   const isNightHour = (hour: number) => {
+    const normalized = normalizeHour(hour);
     if (nightStartHour > nightEndHour) {
-      return hour >= nightStartHour || hour < nightEndHour;
+      return normalized >= nightStartHour || normalized < nightEndHour;
     }
-    return hour >= nightStartHour && hour < nightEndHour;
+    return normalized >= nightStartHour && normalized < nightEndHour;
+  };
+
+  const formatTimestamp = (timestamp: string) =>
+    format(parseISO(timestamp), 'MMM d, HH:mm');
+
+  const positionFromOffsets = (startOffset: number, endOffset?: number) => {
+    const top = ((startOffset + extraHoursBefore * 60) / 60) * HOUR_HEIGHT;
+    const height = endOffset !== undefined
+      ? ((endOffset - startOffset) / 60) * HOUR_HEIGHT
+      : undefined;
+
+    return { top, height };
   };
 
   return (
@@ -68,112 +121,224 @@ export function DailyTimeline({
         <div className="flex">
           {/* Hour labels */}
           <div className="w-16 shrink-0">
-            {HOURS.map((hour) => (
-              <div
-                key={hour}
-                className={cn(
-                  'h-6 flex items-center justify-end pr-2 text-xs text-muted-foreground',
-                  isNightHour(hour) && 'bg-baby-night/30'
-                )}
-              >
-                {hour.toString().padStart(2, '0')}:00
-              </div>
-            ))}
-          </div>
-
-          {/* Day columns */}
-          {data.map((day) => (
-            <div
-              key={day.date}
-              className="flex-1 min-w-[80px] relative border-l border-border"
-            >
-              {/* Hour cells with night highlighting */}
-              {HOURS.map((hour) => (
+            {hours.map((hour) => {
+              const showLabel = hour >= 0 && hour <= 23;
+              const labelHour = normalizeHour(hour);
+              return (
                 <div
                   key={hour}
                   className={cn(
-                    'h-6 border-b border-border/50',
+                    'h-6 flex items-center justify-end pr-2 text-xs text-muted-foreground',
                     isNightHour(hour) && 'bg-baby-night/30'
                   )}
-                />
-              ))}
+                >
+                  {showLabel ? `${labelHour.toString().padStart(2, '0')}:00` : ''}
+                </div>
+              );
+            })}
+          </div>
 
-              {/* Nap/Sleep sessions */}
-              {activeOverlays.includes('naps') &&
-                day.naps.map((nap, idx) => {
-                  const startMinutes = timeToMinutes(nap.startTime);
-                  const top = (startMinutes / 60) * HOUR_HEIGHT;
-                  const height = (nap.durationMinutes / 60) * HOUR_HEIGHT;
+          {/* Day columns */}
+          {data.map((day, dayIndex) => {
+            const dayStart = parseISO(`${day.date}T00:00`);
+            const previousDay = dayIndex > 0 ? data[dayIndex - 1] : null;
 
-                  return (
-                    <div
-                      key={`nap-${idx}`}
-                      className="absolute left-1 right-1 bg-baby-sleep/80 rounded-md border border-baby-sleep-foreground/20"
-                      style={{
-                        top: `${top}px`,
-                        height: `${Math.max(height, 4)}px`,
-                      }}
-                      title={`Sleep: ${nap.startTime} - ${nap.endTime}`}
-                    />
-                  );
-                })}
+            const spilloverNaps = previousDay
+              ? previousDay.naps.filter(
+                  (nap) => parseISO(nap.endTime) > dayStart
+                )
+              : [];
 
-              {/* Feeding sessions */}
-              {activeOverlays.includes('feedings') &&
-                day.feedings.map((feeding, idx) => {
-                  const startMinutes = timeToMinutes(feeding.startTime);
-                  const top = (startMinutes / 60) * HOUR_HEIGHT;
-                  const height = (feeding.durationMinutes / 60) * HOUR_HEIGHT;
+            const spilloverFeedings = previousDay
+              ? previousDay.feedings.filter(
+                  (feeding) => parseISO(feeding.endTime) > dayStart
+                )
+              : [];
 
-                  return (
-                    <div
-                      key={`feeding-${idx}`}
-                      className="absolute left-2 right-2 bg-baby-feeding/80 rounded-sm border border-baby-feeding-foreground/20"
-                      style={{
-                        top: `${top}px`,
-                        height: `${Math.max(height, 3)}px`,
-                      }}
-                      title={`Feeding: ${feeding.startTime} - ${feeding.endTime}`}
-                    />
-                  );
-                })}
+            const napsToRender = [...day.naps, ...spilloverNaps];
+            const feedingsToRender = [...day.feedings, ...spilloverFeedings];
 
-              {/* Diaper markers - distributed throughout the day */}
-              {activeOverlays.includes('wetDiapers') &&
-                Array.from({ length: day.wetDiaperChanges }).map((_, idx) => {
-                  const hour = 6 + Math.floor((idx * 14) / day.wetDiaperChanges);
-                  const top = hour * HOUR_HEIGHT + 4;
+            return (
+              <div
+                key={day.date}
+                className="flex-1 min-w-[80px] relative border-l border-border"
+              >
+                {/* Hour cells with night highlighting */}
+                {hours.map((hour) => (
+                  <div
+                    key={hour}
+                    className={cn(
+                      'h-6 border-b border-border/50',
+                      isNightHour(hour) && 'bg-baby-night/30'
+                    )}
+                  />
+                ))}
 
-                  return (
-                    <div
-                      key={`wet-${idx}`}
-                      className="absolute left-0.5 text-baby-wet"
-                      style={{ top: `${top}px` }}
-                      title="Wet diaper"
-                    >
-                      <Droplets className="h-3 w-3" />
-                    </div>
-                  );
-                })}
+                {/* Nap/Sleep sessions */}
+                {activeOverlays.includes('naps') &&
+                  napsToRender.map((nap, idx) => {
+                    const startOffset = differenceInMinutes(
+                      parseISO(nap.startTime),
+                      dayStart
+                    );
+                    const endOffset = differenceInMinutes(
+                      parseISO(nap.endTime),
+                      dayStart
+                    );
+                    const { top, height } = positionFromOffsets(startOffset, endOffset);
 
-              {activeOverlays.includes('dirtyDiapers') &&
-                Array.from({ length: day.dirtyDiaperChanges }).map((_, idx) => {
-                  const hour = 7 + Math.floor((idx * 12) / Math.max(day.dirtyDiaperChanges, 1));
-                  const top = hour * HOUR_HEIGHT + 12;
+                    return (
+                      <Popover key={`nap-${day.date}-${idx}`}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="absolute left-1 right-1 bg-baby-sleep/80 rounded-md border border-baby-sleep-foreground/20 cursor-pointer p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                            style={{
+                              top: `${top}px`,
+                              height: `${Math.max(height ?? 0, 4)}px`,
+                            }}
+                            aria-label={`Sleep ${formatTimestamp(nap.startTime)} to ${formatTimestamp(
+                              nap.endTime
+                            )}`}
+                          />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-2 text-xs">
+                          <div className="font-medium text-sm">Sleep</div>
+                          <div>Start: {formatTimestamp(nap.startTime)}</div>
+                          <div>End: {formatTimestamp(nap.endTime)}</div>
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  })}
 
-                  return (
-                    <div
-                      key={`dirty-${idx}`}
-                      className="absolute right-0.5 text-baby-dirty"
-                      style={{ top: `${top}px` }}
-                      title="Dirty diaper"
-                    >
-                      <CircleDot className="h-3 w-3" />
-                    </div>
-                  );
-                })}
-            </div>
-          ))}
+                {/* Feeding sessions */}
+                {activeOverlays.includes('feedings') &&
+                  feedingsToRender.map((feeding, idx) => {
+                    const startOffset = differenceInMinutes(
+                      parseISO(feeding.startTime),
+                      dayStart
+                    );
+                    const endOffset = differenceInMinutes(
+                      parseISO(feeding.endTime),
+                      dayStart
+                    );
+                    const { top, height } = positionFromOffsets(startOffset, endOffset);
+
+                    return (
+                      <Popover key={`feeding-${day.date}-${idx}`}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="absolute left-2 right-2 bg-baby-feeding/80 rounded-sm border border-baby-feeding-foreground/20 cursor-pointer p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                            style={{
+                              top: `${top}px`,
+                              height: `${Math.max(height ?? 0, 3)}px`,
+                            }}
+                            aria-label={`Feeding ${formatTimestamp(
+                              feeding.startTime
+                            )} to ${formatTimestamp(feeding.endTime)}`}
+                          />
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-2 text-xs">
+                          <div className="font-medium text-sm">Feeding</div>
+                          <div>Start: {formatTimestamp(feeding.startTime)}</div>
+                          <div>End: {formatTimestamp(feeding.endTime)}</div>
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  })}
+
+                {/* Diaper markers */}
+                {activeOverlays.includes('wetDiapers') &&
+                  day.wetDiapers.map((timestamp, idx) => {
+                    const offsetMinutes = differenceInMinutes(
+                      parseISO(timestamp),
+                      dayStart
+                    );
+                    const { top } = positionFromOffsets(offsetMinutes);
+
+                    return (
+                      <Popover key={`wet-${day.date}-${idx}`}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="absolute left-0.5 text-baby-wet cursor-pointer bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                            style={{ top: `${top + 4}px` }}
+                            aria-label={`Wet diaper at ${formatTimestamp(timestamp)}`}
+                          >
+                            <Droplets className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-44 p-2 text-xs">
+                          <div className="font-medium text-sm">Wet diaper</div>
+                          <div>Time: {formatTimestamp(timestamp)}</div>
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  })}
+
+                {activeOverlays.includes('dirtyDiapers') &&
+                  day.dirtyDiapers.map((timestamp, idx) => {
+                    const offsetMinutes = differenceInMinutes(
+                      parseISO(timestamp),
+                      dayStart
+                    );
+                    const { top } = positionFromOffsets(offsetMinutes);
+
+                    return (
+                      <Popover key={`dirty-${day.date}-${idx}`}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="absolute right-0.5 text-baby-dirty cursor-pointer bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                            style={{ top: `${top + 12}px` }}
+                            aria-label={`Dirty diaper at ${formatTimestamp(timestamp)}`}
+                          >
+                            <CircleDot className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-44 p-2 text-xs">
+                          <div className="font-medium text-sm">Dirty diaper</div>
+                          <div>Time: {formatTimestamp(timestamp)}</div>
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  })}
+
+                {/* Comment markers */}
+                {activeOverlays.includes('comments') &&
+                  day.comments.map((comment, idx) => {
+                    const offsetMinutes = differenceInMinutes(
+                      parseISO(comment.time),
+                      dayStart
+                    );
+                    const { top } = positionFromOffsets(offsetMinutes);
+
+                    return (
+                      <Popover key={`comment-${day.date}-${idx}`}>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="absolute left-1/2 -translate-x-1/2 text-baby-mint cursor-pointer bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                            style={{ top: `${top + 4}px` }}
+                            aria-label={`Comment at ${formatTimestamp(comment.time)}`}
+                          >
+                            <MessageCircle className="h-3.5 w-3.5" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-2 text-xs">
+                          <div className="font-medium text-sm">Comment</div>
+                          <div>Time: {formatTimestamp(comment.time)}</div>
+                          <div className="mt-1 text-muted-foreground">
+                            {comment.text}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  })}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

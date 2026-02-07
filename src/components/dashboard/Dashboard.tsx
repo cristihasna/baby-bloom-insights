@@ -24,6 +24,7 @@ export function Dashboard() {
   const [activeOverlays, setActiveOverlays] = useState<OverlayType[]>([
     'naps',
     'feedings',
+    'comments',
   ]);
 
   const toggleOverlay = (overlay: OverlayType) => {

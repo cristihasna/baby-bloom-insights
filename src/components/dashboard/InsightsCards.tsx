@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { differenceInMinutes, parseISO } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DaySummary } from '@/types/baby-log';
 import { Clock, Baby, Moon, AlertCircle } from 'lucide-react';
@@ -22,10 +23,13 @@ export function InsightsCards({ data }: InsightsCardsProps) {
       if (d.naps.length < 2) return sum;
       const dayNaps = d.naps
         .filter((n) => {
-          const hour = parseInt(n.startTime.split(':')[0]);
+          const hour = parseISO(n.startTime).getHours();
           return hour >= 7 && hour < 19;
         })
-        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+        .sort(
+          (a, b) =>
+            parseISO(a.startTime).getTime() - parseISO(b.startTime).getTime()
+        );
 
       if (dayNaps.length < 2) return sum;
 
@@ -33,9 +37,7 @@ export function InsightsCards({ data }: InsightsCardsProps) {
       for (let i = 1; i < dayNaps.length; i++) {
         const prevEnd = dayNaps[i - 1].endTime;
         const currStart = dayNaps[i].startTime;
-        const [ph, pm] = prevEnd.split(':').map(Number);
-        const [ch, cm] = currStart.split(':').map(Number);
-        totalWakeTime += (ch * 60 + cm) - (ph * 60 + pm);
+        totalWakeTime += differenceInMinutes(parseISO(currStart), parseISO(prevEnd));
       }
       return sum + totalWakeTime / (dayNaps.length - 1);
     }, 0) / data.length;

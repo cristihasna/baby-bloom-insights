@@ -1,4 +1,4 @@
-import { Moon, Baby, Droplets, CircleDot } from 'lucide-react';
+import { Moon, Baby, Droplets, CircleDot, MessageCircle } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
 import { OverlayType } from '@/types/baby-log';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,7 @@ const overlayConfig: { type: OverlayType; icon: typeof Moon; label: string; colo
   { type: 'feedings', icon: Baby, label: 'Feedings', colorClass: 'data-[state=on]:bg-baby-feeding data-[state=on]:text-baby-feeding-foreground' },
   { type: 'wetDiapers', icon: Droplets, label: 'Wet', colorClass: 'data-[state=on]:bg-baby-wet data-[state=on]:text-baby-wet-foreground' },
   { type: 'dirtyDiapers', icon: CircleDot, label: 'Dirty', colorClass: 'data-[state=on]:bg-baby-dirty data-[state=on]:text-baby-dirty-foreground' },
+  { type: 'comments', icon: MessageCircle, label: 'Comments', colorClass: 'data-[state=on]:bg-baby-mint data-[state=on]:text-baby-mint-foreground' },
 ];
 
 export function OverlayToggle({ activeOverlays, onToggle }: OverlayToggleProps) {
