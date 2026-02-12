@@ -5,6 +5,10 @@ interface ApiRequestOptions extends RequestInit {
   accessToken?: string;
 }
 
+interface ApiResponse<T> {
+  items: T[];
+}
+
 function joinApiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${apiEnv.baseUrl}${normalizedPath}`;
@@ -52,5 +56,7 @@ export async function fetchLogs({ from, to, accessToken }: FetchLogsParams): Pro
     accessToken,
   });
 
-  return (await response.json()) as DaySummary[];
+  const apiResponse = await response.json() as ApiResponse<DaySummary>;
+
+  return apiResponse.items;
 }

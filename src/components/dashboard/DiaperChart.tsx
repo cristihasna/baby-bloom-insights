@@ -21,8 +21,9 @@ export function DiaperChart({ data }: DiaperChartProps) {
   const chartData = useMemo(() => {
     return data.map((d) => ({
       date: format(parseISO(d.date), 'MMM d'),
-      wet: d.wetDiapers.length,
-      dirty: d.dirtyDiapers.length,
+      wet: d.wetDiaperChanges,
+      dirty: d.dirtyDiaperChanges,
+      mixed: d.mixedDiaperChanges,
     }));
   }, [data]);
 
@@ -60,6 +61,12 @@ export function DiaperChart({ data }: DiaperChartProps) {
               dataKey="dirty"
               name="Dirty"
               fill="hsl(var(--baby-dirty))"
+              radius={[4, 4, 0, 0]}
+            />
+            <Bar
+              dataKey="mixed"
+              name="Mixed"
+              fill="hsl(var(--baby-mint))"
               radius={[4, 4, 0, 0]}
             />
           </BarChart>

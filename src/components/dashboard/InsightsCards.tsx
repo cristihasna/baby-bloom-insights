@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { differenceInMinutes, parseISO } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DaySummary } from '@/types/baby-log';
 import { Clock, Baby, Moon, AlertCircle } from 'lucide-react';
@@ -18,29 +17,8 @@ export function InsightsCards({ data }: InsightsCardsProps) {
     const avgNightWakeUps =
       data.reduce((sum, d) => sum + d.totalNightWakeUps, 0) / data.length;
 
-    // Calculate average wake window (time between naps)
-    const avgWakeWindow = data.reduce((sum, d) => {
-      if (d.naps.length < 2) return sum;
-      const dayNaps = d.naps
-        .filter((n) => {
-          const hour = parseISO(n.startTime).getHours();
-          return hour >= 7 && hour < 19;
-        })
-        .sort(
-          (a, b) =>
-            parseISO(a.startTime).getTime() - parseISO(b.startTime).getTime()
-        );
-
-      if (dayNaps.length < 2) return sum;
-
-      let totalWakeTime = 0;
-      for (let i = 1; i < dayNaps.length; i++) {
-        const prevEnd = dayNaps[i - 1].endTime;
-        const currStart = dayNaps[i].startTime;
-        totalWakeTime += differenceInMinutes(parseISO(currStart), parseISO(prevEnd));
-      }
-      return sum + totalWakeTime / (dayNaps.length - 1);
-    }, 0) / data.length;
+    const avgWakeWindow =
+      data.reduce((sum, d) => sum + d.averageDayWakeDuration, 0) / data.length;
 
     const avgTotalSleep =
       data.reduce((sum, d) => sum + d.totalSleepTime, 0) / data.length;
