@@ -1,9 +1,13 @@
-import { useState, useMemo } from 'react';
-import { Baby } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { format } from 'date-fns';
+import { Baby, LogOut } from 'lucide-react';
+import { useAuth } from '@/auth/use-auth';
 import { useSettings } from '@/hooks/use-settings';
 import { useDateRange } from '@/hooks/use-date-range';
-import { generateMockData } from '@/lib/mock-data';
+import { fetchLogs } from '@/lib/api';
 import { OverlayType } from '@/types/baby-log';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { SettingsPanel } from './SettingsPanel';
 import { DateRangeSelector } from './DateRangeSelector';
@@ -17,6 +21,7 @@ import { NightWakeUpsChart } from './NightWakeUpsChart';
 import { FeedingChart } from './FeedingChart';
 
 export function Dashboard() {
+  const { apiToken, signOut } = useAuth();
   const { settings, updateSettings } = useSettings();
   const { dateRange, setPreset, setCustomRange, presetOptions } = useDateRange(
     settings.birthDate
@@ -35,19 +40,30 @@ export function Dashboard() {
     );
   };
 
-  const data = useMemo(() => {
-    const birthDate = settings.birthDate
-      ? new Date(settings.birthDate)
-      : new Date(Date.now() - 90 * 24 * 60 * 60 * 1000); // Default: 90 days ago
+  const from = useMemo(
+    () => format(dateRange.startDate, 'yyyy-MM-dd'),
+    [dateRange.startDate]
+  );
+  const to = useMemo(
+    () => format(dateRange.endDate, 'yyyy-MM-dd'),
+    [dateRange.endDate]
+  );
 
-    return generateMockData(
-      dateRange.startDate,
-      dateRange.endDate,
-      birthDate,
-      settings.nightStartHour,
-      settings.nightEndHour
-    );
-  }, [dateRange, settings.birthDate, settings.nightStartHour, settings.nightEndHour]);
+  const logsQuery = useQuery({
+    queryKey: ['logs', from, to],
+    queryFn: async () => {
+      if (!apiToken) throw new Error('Missing API token.');
+      return fetchLogs({
+        from,
+        to,
+        accessToken: apiToken,
+      });
+    },
+    enabled: Boolean(apiToken),
+    retry: false,
+  });
+
+  const data = logsQuery.data ?? [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -60,11 +76,57 @@ export function Dashboard() {
             </div>
             <h1 className="text-xl font-semibold">Baby Log Dashboard</h1>
           </div>
-          <SettingsPanel settings={settings} onUpdateSettings={updateSettings} />
+          <div className="flex items-center gap-2">
+            <SettingsPanel settings={settings} onUpdateSettings={updateSettings} />
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full"
+              onClick={signOut}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </Button>
+          </div>
         </div>
       </header>
 
       <main className="container px-4 py-6 space-y-6">
+        {logsQuery.isLoading && (
+          <Card className="rounded-2xl">
+            <CardContent className="py-6">
+              <p className="text-sm text-muted-foreground text-center">
+                Loading authenticated logs...
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {logsQuery.isError && (
+          <Card className="rounded-2xl border-destructive/30">
+            <CardContent className="py-6 space-y-4">
+              <p className="text-sm text-destructive text-center">
+                Failed to load logs from API. Check authentication and endpoint settings.
+              </p>
+              <div className="flex justify-center">
+                <Button type="button" variant="outline" onClick={() => logsQuery.refetch()}>
+                  Retry
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!logsQuery.isLoading && !logsQuery.isError && data.length === 0 && (
+          <Card className="rounded-2xl">
+            <CardContent className="py-6">
+              <p className="text-sm text-muted-foreground text-center">
+                No logs were returned for this date range.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Date Range & Overlay Controls */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <DateRangeSelector

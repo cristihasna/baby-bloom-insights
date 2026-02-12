@@ -60,6 +60,28 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Environment variables
+
+Create `/.env.local` for local development and define:
+
+```env
+VITE_AWS_REGION=us-east-1
+VITE_COGNITO_AUTHORITY=https://cognito-idp.us-east-1.amazonaws.com/us-east-1_xxxxx
+VITE_COGNITO_USER_POOL_CLIENT_ID=xxxxxxxx
+VITE_COGNITO_DOMAIN=your-domain-prefix.auth.us-east-1.amazoncognito.com
+VITE_COGNITO_REDIRECT_SIGN_IN=http://localhost:5173/
+VITE_COGNITO_REDIRECT_SIGN_OUT=http://localhost:5173/
+VITE_COGNITO_RESPONSE_TYPE=code
+VITE_COGNITO_SCOPES=openid email profile
+VITE_API_BASE_URL=https://api.example.com
+```
+
+For production, set the same keys in your hosting platform's build/runtime environment settings.
+
+Notes:
+- `VITE_*` values are bundled into the frontend, so never store secrets in them.
+- Google client secrets stay in AWS Cognito/Firebase/IdP backend configuration, not in this repo.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
