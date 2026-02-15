@@ -21,9 +21,10 @@ export function DiaperChart({ data }: DiaperChartProps) {
   const chartData = useMemo(() => {
     return data.map((d) => ({
       date: format(parseISO(d.date), 'MMM d'),
+      mixed: d.mixedDiaperChanges,
       wet: d.wetDiaperChanges,
       dirty: d.dirtyDiaperChanges,
-      mixed: d.mixedDiaperChanges,
+      total: d.wetDiaperChanges + d.dirtyDiaperChanges + d.mixedDiaperChanges,
     }));
   }, [data]);
 
@@ -49,24 +50,38 @@ export function DiaperChart({ data }: DiaperChartProps) {
                 border: '1px solid hsl(var(--border))',
                 borderRadius: '0.75rem',
               }}
+              formatter={(value: number, name: string, props: any) => {
+                const { payload } = props;
+                if (name === 'mixed') return [value, 'Mixed'];
+                if (name === 'wet') return [value, 'Wet'];
+                if (name === 'dirty') return [value, 'Dirty'];
+                return [value, name];
+              }}
+              labelFormatter={(label) => {
+                const item = chartData.find((d) => d.date === label);
+                return `${label} (Total: ${item?.total || 0})`;
+              }}
             />
             <Legend />
             <Bar
+              dataKey="mixed"
+              name="Mixed"
+              stackId="a"
+              fill="hsl(var(--baby-mint))"
+              radius={[0, 0, 0, 0]}
+            />
+            <Bar
               dataKey="wet"
               name="Wet"
+              stackId="a"
               fill="hsl(var(--baby-wet))"
-              radius={[4, 4, 0, 0]}
+              radius={[0, 0, 0, 0]}
             />
             <Bar
               dataKey="dirty"
               name="Dirty"
+              stackId="a"
               fill="hsl(var(--baby-dirty))"
-              radius={[4, 4, 0, 0]}
-            />
-            <Bar
-              dataKey="mixed"
-              name="Mixed"
-              fill="hsl(var(--baby-mint))"
               radius={[4, 4, 0, 0]}
             />
           </BarChart>

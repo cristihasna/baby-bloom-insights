@@ -2,12 +2,11 @@ import { useMemo } from 'react';
 import { addDays, differenceInWeeks, format, parseISO } from 'date-fns';
 import { DaySummary, OverlayType } from '@/types/baby-log';
 import { cn } from '@/lib/utils';
-import { Droplets, CircleDot, MessageCircle } from 'lucide-react';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { NapBar } from './timeline/NapBar';
+import { FeedingBar } from './timeline/FeedingBar';
+import { WetDiaperIndicator } from './timeline/WetDiaperIndicator';
+import { DirtyDiaperIndicator } from './timeline/DirtyDiaperIndicator';
+import { CommentIndicator } from './timeline/CommentIndicator';
 
 interface DailyTimelineProps {
   data: DaySummary[];
@@ -19,19 +18,24 @@ interface DailyTimelineProps {
 
 const HOUR_HEIGHT = 24; // pixels per hour
 const DAY_MINUTES = 24 * 60;
+const DAY_COLUMN_WIDTH = 40; // pixels per day column
 
 function parseTimeToMinutes(time: string): number {
   const [hours, minutes] = time.split(':').map((value) => Number(value));
   return hours * 60 + minutes;
 }
 
-function getEventOffsets(startTime: string, endTime: string) {
-  const startOffset = parseTimeToMinutes(startTime);
+function getEventOffsets(startTime: string, endTime: string, isFirstEvent: boolean = false) {
+  let startOffset = parseTimeToMinutes(startTime);
   let endOffset = parseTimeToMinutes(endTime);
-  if (endOffset <= startOffset) {
-    endOffset += DAY_MINUTES;
+  const isOverlappingMidnight = endOffset <= startOffset;
+  // cap endOffset to 24 hours to prevent excessively long bars when events span multiple days
+  if (isOverlappingMidnight && !isFirstEvent) {
+    endOffset = DAY_MINUTES;
+  } else if (isOverlappingMidnight && isFirstEvent) {
+    startOffset = 0;
   }
-  return { startOffset, endOffset };
+  return { startOffset, endOffset, isOverlappingMidnight };
 }
 
 function formatTimestamp(date: string, time: string, dayOffset = 0) {
@@ -40,13 +44,49 @@ function formatTimestamp(date: string, time: string, dayOffset = 0) {
   return `${format(dated, 'MMM d')}, ${time}`;
 }
 
-export function DailyTimeline({
-  data,
-  birthDate,
-  nightStartHour,
-  nightEndHour,
-  activeOverlays,
-}: DailyTimelineProps) {
+export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, activeOverlays }: DailyTimelineProps) {
+  // Preprocess data to handle midnight-spanning events
+  const processedData = useMemo(() => {
+    // Deep clone the data to avoid mutations
+    const clonedData: DaySummary[] = data.map((day) => ({
+      ...day,
+      naps: [...day.naps],
+      feedings: [...day.feedings],
+      diaperChanges: [...day.diaperChanges],
+      comments: [...day.comments],
+    }));
+
+    // Process naps and feedings to split midnight-spanning events
+    for (let i = 0; i < clonedData.length - 1; i++) {
+      const day = clonedData[i];
+      const nextDay = clonedData[i + 1];
+
+      // Process naps
+      day.naps.forEach((nap, idx) => {
+        const isFirstNap = idx === 0;
+        const { isOverlappingMidnight } = getEventOffsets(nap.startTime, nap.endTime, isFirstNap);
+        
+        if (isOverlappingMidnight && !isFirstNap) {
+          // Add to next day's naps at the beginning
+          nextDay.naps.unshift(nap);
+        }
+      });
+
+      // Process feedings
+      day.feedings.forEach((feeding, idx) => {
+        const isFirstFeeding = idx === 0;
+        const { isOverlappingMidnight } = getEventOffsets(feeding.startTime, feeding.endTime, isFirstFeeding);
+        
+        if (isOverlappingMidnight && !isFirstFeeding) {
+          // Add to next day's feedings at the beginning
+          nextDay.feedings.unshift(feeding);
+        }
+      });
+    }
+
+    return clonedData;
+  }, [data]);
+
   const getWeekLabel = useMemo(() => {
     return (dateStr: string) => {
       if (!birthDate) return null;
@@ -55,26 +95,39 @@ export function DailyTimeline({
     };
   }, [birthDate]);
 
-  const extraHoursAfter = useMemo(() => {
-    let maxAfterMinutes = 0;
+  // Group consecutive days by week
+  const weekGroups = useMemo(() => {
+    if (!birthDate) return [];
+    
+    const groups: { weekLabel: string; startIndex: number; count: number }[] = [];
+    let currentWeek: string | null = null;
+    let currentGroup: { weekLabel: string; startIndex: number; count: number } | null = null;
 
-    data.forEach((day) => {
-      const events = [...day.naps, ...day.feedings];
-      events.forEach((event) => {
-        const { endOffset } = getEventOffsets(event.startTime, event.endTime);
-        if (endOffset > DAY_MINUTES) {
-          maxAfterMinutes = Math.max(maxAfterMinutes, endOffset - DAY_MINUTES);
+    processedData.forEach((day, index) => {
+      const weekLabel = getWeekLabel(day.date);
+      
+      if (weekLabel !== currentWeek) {
+        if (currentGroup) {
+          groups.push(currentGroup);
         }
-      });
+        currentWeek = weekLabel;
+        currentGroup = weekLabel ? { weekLabel, startIndex: index, count: 1 } : null;
+      } else if (currentGroup) {
+        currentGroup.count++;
+      }
     });
 
-    return Math.max(2, Math.ceil(maxAfterMinutes / 60));
-  }, [data]);
+    if (currentGroup) {
+      groups.push(currentGroup);
+    }
+
+    return groups;
+  }, [birthDate, processedData, getWeekLabel]);
 
   const hours = useMemo(() => {
-    const total = 24 + extraHoursAfter;
+    const total = 24;
     return Array.from({ length: total }, (_, i) => i);
-  }, [extraHoursAfter]);
+  }, []);
 
   const isNightHour = (hour: number) => {
     const normalized = hour % 24;
@@ -86,9 +139,7 @@ export function DailyTimeline({
 
   const positionFromOffsets = (startOffset: number, endOffset?: number) => {
     const top = (startOffset / 60) * HOUR_HEIGHT;
-    const height = endOffset !== undefined
-      ? ((endOffset - startOffset) / 60) * HOUR_HEIGHT
-      : undefined;
+    const height = endOffset !== undefined ? ((endOffset - startOffset) / 60) * HOUR_HEIGHT : undefined;
 
     return { top, height };
   };
@@ -96,24 +147,32 @@ export function DailyTimeline({
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[800px]">
+        {/* Week header row */}
+        {birthDate && weekGroups.length > 0 && (
+          <div className="flex border-b border-border">
+            <div className="w-16 shrink-0" />
+            {weekGroups.map((group, idx) => (
+              <div
+                key={`week-${group.startIndex}-${idx}`}
+                className="flex items-center justify-center py-1 px-1 text-center border-l border-border bg-primary/5"
+                style={{
+                  flex: `${group.count} 1 0`,
+                  minWidth: `${group.count * DAY_COLUMN_WIDTH}px`,
+                }}
+              >
+                <div className="text-xs font-medium text-primary">{group.weekLabel}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Day header row */}
         <div className="flex border-b border-border">
           <div className="w-16 shrink-0" />
-          {data.map((day) => (
-            <div
-              key={day.date}
-              className="flex-1 min-w-[80px] px-1 py-2 text-center border-l border-border"
-            >
-              <div className="text-sm font-medium">
-                {format(parseISO(day.date), 'EEE')}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {format(parseISO(day.date), 'MMM d')}
-              </div>
-              {birthDate && (
-                <div className="text-xs text-primary font-medium mt-1">
-                  {getWeekLabel(day.date)}
-                </div>
-              )}
+          {processedData.map((day) => (
+            <div key={day.date} className="flex-1 px-1 py-2 text-center border-l border-border" style={{ minWidth: `${DAY_COLUMN_WIDTH}px` }}>
+              <div className="text-sm font-medium">{format(parseISO(day.date), 'EEE')}</div>
+              <div className="text-xs text-muted-foreground">{format(parseISO(day.date), 'MMM d')}</div>
             </div>
           ))}
         </div>
@@ -125,7 +184,7 @@ export function DailyTimeline({
                 key={hour}
                 className={cn(
                   'h-6 flex items-center justify-end pr-2 text-xs text-muted-foreground',
-                  isNightHour(hour) && 'bg-baby-night/30'
+                  isNightHour(hour) && 'bg-baby-night/30',
                 )}
               >
                 {`${(hour % 24).toString().padStart(2, '0')}:00`}
@@ -133,88 +192,82 @@ export function DailyTimeline({
             ))}
           </div>
 
-          {data.map((day) => {
+          {processedData.map((day, dayIndex) => {
             const wetDiaperChanges = day.diaperChanges.filter(
-              (change) => change.type === 'WET' || change.type === 'WET_AND_DIRTY'
+              (change) => change.type === 'WET' || change.type === 'WET_AND_DIRTY',
             );
             const dirtyDiaperChanges = day.diaperChanges.filter(
-              (change) => change.type === 'DIRTY' || change.type === 'WET_AND_DIRTY'
+              (change) => change.type === 'DIRTY' || change.type === 'WET_AND_DIRTY',
             );
 
             return (
-              <div
-                key={day.date}
-                className="flex-1 min-w-[80px] relative border-l border-border"
-              >
+              <div key={day.date} className="flex-1 relative border-l border-border" style={{ minWidth: `${DAY_COLUMN_WIDTH}px` }}>
                 {hours.map((hour) => (
                   <div
                     key={hour}
-                    className={cn(
-                      'h-6 border-b border-border/50',
-                      isNightHour(hour) && 'bg-baby-night/30'
-                    )}
+                    className={cn('h-6 border-b border-border/50', isNightHour(hour) && 'bg-baby-night/30')}
                   />
                 ))}
 
                 {activeOverlays.includes('naps') &&
                   day.naps.map((nap, idx) => {
-                    const { startOffset, endOffset } = getEventOffsets(
+                    const isFirstNap = idx === 0;
+                    const { startOffset, endOffset, isOverlappingMidnight } = getEventOffsets(
                       nap.startTime,
-                      nap.endTime
+                      nap.endTime,
+                      isFirstNap,
                     );
                     const { top, height } = positionFromOffsets(startOffset, endOffset);
-                    const dayOffset = endOffset > DAY_MINUTES ? 1 : 0;
+                    const startDateOffset = isOverlappingMidnight && isFirstNap ? -1 : 0;
+                    const endDayOffset = isOverlappingMidnight && !isFirstNap ? 1 : 0;
+
+                    // Determine fade effects for continuity
+                    const shouldFadeBottom = isOverlappingMidnight && !isFirstNap;
+                    const shouldFadeTop = isFirstNap && isOverlappingMidnight;
 
                     return (
-                      <Popover key={`nap-${day.date}-${idx}`}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="absolute left-1 right-1 bg-baby-sleep/80 rounded-md border border-baby-sleep-foreground/20 cursor-pointer p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                            style={{
-                              top: `${top}px`,
-                              height: `${Math.max(height ?? 0, 4)}px`,
-                            }}
-                            aria-label={`Sleep ${formatTimestamp(day.date, nap.startTime)} to ${formatTimestamp(day.date, nap.endTime, dayOffset)}`}
-                          />
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-2 text-xs">
-                          <div className="font-medium text-sm">Sleep</div>
-                          <div>Start: {formatTimestamp(day.date, nap.startTime)}</div>
-                          <div>End: {formatTimestamp(day.date, nap.endTime, dayOffset)}</div>
-                        </PopoverContent>
-                      </Popover>
+                      <NapBar
+                        key={`nap-${day.date}-${idx}`}
+                        nap={nap}
+                        date={day.date}
+                        top={top}
+                        height={height ?? 0}
+                        shouldFadeBottom={shouldFadeBottom}
+                        shouldFadeTop={shouldFadeTop}
+                        startDateOffset={startDateOffset}
+                        endDayOffset={endDayOffset}
+                        formatTimestamp={formatTimestamp}
+                      />
                     );
                   })}
 
                 {activeOverlays.includes('feedings') &&
                   day.feedings.map((feeding, idx) => {
-                    const { startOffset, endOffset } = getEventOffsets(
+                    const isFirstFeeding = idx === 0;
+                    const { startOffset, endOffset, isOverlappingMidnight } = getEventOffsets(
                       feeding.startTime,
-                      feeding.endTime
+                      feeding.endTime,
+                      isFirstFeeding,
                     );
                     const { top, height } = positionFromOffsets(startOffset, endOffset);
                     const dayOffset = endOffset > DAY_MINUTES ? 1 : 0;
 
+                    // Determine fade effects for continuity
+                    const shouldFadeBottom = isOverlappingMidnight && !isFirstFeeding;
+                    const shouldFadeTop = isFirstFeeding && isOverlappingMidnight;
+
                     return (
-                      <Popover key={`feeding-${day.date}-${idx}`}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="absolute left-2 right-2 bg-baby-feeding/80 rounded-sm border border-baby-feeding-foreground/20 cursor-pointer p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                            style={{
-                              top: `${top}px`,
-                              height: `${Math.max(height ?? 0, 3)}px`,
-                            }}
-                            aria-label={`Feeding ${formatTimestamp(day.date, feeding.startTime)} to ${formatTimestamp(day.date, feeding.endTime, dayOffset)}`}
-                          />
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-2 text-xs">
-                          <div className="font-medium text-sm">Feeding</div>
-                          <div>Start: {formatTimestamp(day.date, feeding.startTime)}</div>
-                          <div>End: {formatTimestamp(day.date, feeding.endTime, dayOffset)}</div>
-                        </PopoverContent>
-                      </Popover>
+                      <FeedingBar
+                        key={`feeding-${day.date}-${idx}`}
+                        feeding={feeding}
+                        date={day.date}
+                        top={top}
+                        height={height ?? 0}
+                        shouldFadeBottom={shouldFadeBottom}
+                        shouldFadeTop={shouldFadeTop}
+                        dayOffset={dayOffset}
+                        formatTimestamp={formatTimestamp}
+                      />
                     );
                   })}
 
@@ -224,22 +277,13 @@ export function DailyTimeline({
                     const { top } = positionFromOffsets(offsetMinutes);
 
                     return (
-                      <Popover key={`wet-${day.date}-${idx}`}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="absolute left-0.5 text-baby-wet cursor-pointer bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                            style={{ top: `${top + 4}px` }}
-                            aria-label={`Wet diaper at ${formatTimestamp(day.date, change.time)}`}
-                          >
-                            <Droplets className="h-3 w-3" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-44 p-2 text-xs">
-                          <div className="font-medium text-sm">Wet diaper</div>
-                          <div>Time: {formatTimestamp(day.date, change.time)}</div>
-                        </PopoverContent>
-                      </Popover>
+                      <WetDiaperIndicator
+                        key={`wet-${day.date}-${idx}`}
+                        time={change.time}
+                        date={day.date}
+                        top={top}
+                        formatTimestamp={formatTimestamp}
+                      />
                     );
                   })}
 
@@ -249,22 +293,13 @@ export function DailyTimeline({
                     const { top } = positionFromOffsets(offsetMinutes);
 
                     return (
-                      <Popover key={`dirty-${day.date}-${idx}`}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="absolute right-0.5 text-baby-dirty cursor-pointer bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                            style={{ top: `${top + 12}px` }}
-                            aria-label={`Dirty diaper at ${formatTimestamp(day.date, change.time)}`}
-                          >
-                            <CircleDot className="h-3 w-3" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-44 p-2 text-xs">
-                          <div className="font-medium text-sm">Dirty diaper</div>
-                          <div>Time: {formatTimestamp(day.date, change.time)}</div>
-                        </PopoverContent>
-                      </Popover>
+                      <DirtyDiaperIndicator
+                        key={`dirty-${day.date}-${idx}`}
+                        time={change.time}
+                        date={day.date}
+                        top={top}
+                        formatTimestamp={formatTimestamp}
+                      />
                     );
                   })}
 
@@ -274,25 +309,13 @@ export function DailyTimeline({
                     const { top } = positionFromOffsets(offsetMinutes);
 
                     return (
-                      <Popover key={`comment-${day.date}-${idx}`}>
-                        <PopoverTrigger asChild>
-                          <button
-                            type="button"
-                            className="absolute left-1/2 -translate-x-1/2 text-baby-mint cursor-pointer bg-transparent p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                            style={{ top: `${top + 4}px` }}
-                            aria-label={`Comment at ${formatTimestamp(day.date, comment.time)}`}
-                          >
-                            <MessageCircle className="h-3.5 w-3.5" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-2 text-xs">
-                          <div className="font-medium text-sm">Comment</div>
-                          <div>Time: {formatTimestamp(day.date, comment.time)}</div>
-                          <div className="mt-1 text-muted-foreground">
-                            {comment.message}
-                          </div>
-                        </PopoverContent>
-                      </Popover>
+                      <CommentIndicator
+                        key={`comment-${day.date}-${idx}`}
+                        comment={comment}
+                        date={day.date}
+                        top={top}
+                        formatTimestamp={formatTimestamp}
+                      />
                     );
                   })}
               </div>

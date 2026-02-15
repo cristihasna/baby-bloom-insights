@@ -59,7 +59,7 @@ All colors MUST be HSL.
     --baby-wet-foreground: 200 50% 25%;
     --baby-dirty: 35 60% 70%;
     --baby-dirty-foreground: 35 50% 25%;
-    --baby-night: 250 30% 92%;
+    --baby-night: 250 30% 60%;
     --baby-mint: 160 45% 75%;
     --baby-mint-foreground: 160 40% 25%;
     --chart-1: 158 64% 51%;
@@ -121,7 +121,7 @@ All colors MUST be HSL.
     --sidebar-ring: 158 64% 51%;
 
     /* Baby dashboard specific colors - dark mode */
-    --baby-sleep: 250 50% 55%;
+    --baby-sleep: 250 50% 10%;
     --baby-sleep-foreground: 250 30% 95%;
     --baby-feeding: 340 60% 55%;
     --baby-feeding-foreground: 340 30% 95%;
@@ -129,7 +129,7 @@ All colors MUST be HSL.
     --baby-wet-foreground: 200 30% 95%;
     --baby-dirty: 35 50% 50%;
     --baby-dirty-foreground: 35 30% 95%;
-    --baby-night: 250 25% 18%;
+    --baby-night: 250 50% 55%;;
     --baby-mint: 160 35% 45%;
     --baby-mint-foreground: 160 25% 95%;
     --chart-1: 156 71% 66%;

@@ -19,6 +19,7 @@ import { SleepChart, NapDurationChart } from './SleepChart';
 import { InsightsCards } from './InsightsCards';
 import { NightWakeUpsChart } from './NightWakeUpsChart';
 import { FeedingChart } from './FeedingChart';
+import { WakeWindowChart } from './WakeWindowChart';
 
 export function Dashboard() {
   const { apiToken, signOut } = useAuth();
@@ -176,6 +177,7 @@ export function Dashboard() {
           <NapDurationChart data={data} />
           <DiaperChart data={data} />
           <FeedingChart data={data} />
+          <WakeWindowChart data={data} />
           <WeightChart data={data} birthDate={settings.birthDate} />
           <NightWakeUpsChart data={data} />
         </div>
