@@ -1,7 +1,7 @@
-import { Moon, Baby, Droplets, CircleDot, MessageCircle } from 'lucide-react';
 import { Toggle } from '@/components/ui/toggle';
-import { OverlayType } from '@/types/baby-log';
 import { cn } from '@/lib/utils';
+import { OverlayType } from '@/types/baby-log';
+import { Baby, CircleDot, Droplets, MessageCircle, Moon, SunMoon } from 'lucide-react';
 
 interface OverlayToggleProps {
   activeOverlays: OverlayType[];
@@ -9,11 +9,42 @@ interface OverlayToggleProps {
 }
 
 const overlayConfig: { type: OverlayType; icon: typeof Moon; label: string; colorClass: string }[] = [
-  { type: 'naps', icon: Moon, label: 'Sleep', colorClass: 'data-[state=on]:bg-baby-sleep data-[state=on]:text-baby-sleep-foreground' },
-  { type: 'feedings', icon: Baby, label: 'Feedings', colorClass: 'data-[state=on]:bg-baby-feeding data-[state=on]:text-baby-feeding-foreground' },
-  { type: 'wetDiapers', icon: Droplets, label: 'Wet', colorClass: 'data-[state=on]:bg-baby-wet data-[state=on]:text-baby-wet-foreground' },
-  { type: 'dirtyDiapers', icon: CircleDot, label: 'Dirty', colorClass: 'data-[state=on]:bg-baby-dirty data-[state=on]:text-baby-dirty-foreground' },
-  { type: 'comments', icon: MessageCircle, label: 'Comments', colorClass: 'data-[state=on]:bg-baby-mint data-[state=on]:text-baby-mint-foreground' },
+  {
+    type: 'naps',
+    icon: Moon,
+    label: 'Sleep',
+    colorClass: 'data-[state=on]:bg-baby-sleep data-[state=on]:text-baby-sleep-foreground',
+  },
+  {
+    type: 'feedings',
+    icon: Baby,
+    label: 'Feedings',
+    colorClass: 'data-[state=on]:bg-baby-feeding data-[state=on]:text-baby-feeding-foreground',
+  },
+  {
+    type: 'wetDiapers',
+    icon: Droplets,
+    label: 'Wet',
+    colorClass: 'data-[state=on]:bg-baby-wet data-[state=on]:text-baby-wet-foreground',
+  },
+  {
+    type: 'dirtyDiapers',
+    icon: CircleDot,
+    label: 'Dirty',
+    colorClass: 'data-[state=on]:bg-baby-dirty data-[state=on]:text-baby-dirty-foreground',
+  },
+  {
+    type: 'comments',
+    icon: MessageCircle,
+    label: 'Comments',
+    colorClass: 'data-[state=on]:bg-baby-mint data-[state=on]:text-baby-mint-foreground',
+  },
+  {
+    type: 'nightIndicator',
+    icon: SunMoon,
+    label: 'Night',
+    colorClass: 'data-[state=on]:bg-baby-night data-[state=on]:text-baby-night-foreground',
+  },
 ];
 
 export function OverlayToggle({ activeOverlays, onToggle }: OverlayToggleProps) {

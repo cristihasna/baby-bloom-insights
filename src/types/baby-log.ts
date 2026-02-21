@@ -64,9 +64,4 @@ export interface DateRange {
   preset: 'week' | '2weeks' | 'month' | 'all' | 'custom';
 }
 
-export type OverlayType =
-  | 'naps'
-  | 'feedings'
-  | 'wetDiapers'
-  | 'dirtyDiapers'
-  | 'comments';
+export type OverlayType = 'naps' | 'feedings' | 'wetDiapers' | 'dirtyDiapers' | 'comments' | 'nightIndicator';

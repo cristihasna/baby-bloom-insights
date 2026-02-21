@@ -144,6 +144,8 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
     return { top, height };
   };
 
+  const showNightIndication = activeOverlays.includes('nightIndicator');
+
   return (
     <div className="overflow-x-auto">
       <div className="min-w-[800px]">
@@ -191,7 +193,7 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
                 key={hour}
                 className={cn(
                   'h-6 flex items-center justify-end pr-2 text-xs text-muted-foreground',
-                  isNightHour(hour) && 'bg-baby-night/30',
+                  isNightHour(hour) && showNightIndication && 'bg-baby-night/30',
                 )}
               >
                 {`${(hour % 24).toString().padStart(2, '0')}:00`}
@@ -216,7 +218,10 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
                 {hours.map((hour) => (
                   <div
                     key={hour}
-                    className={cn('h-6 border-b border-border/50', isNightHour(hour) && 'bg-baby-night/30')}
+                    className={cn(
+                      'h-6 border-b border-border/50',
+                      showNightIndication && isNightHour(hour) && 'bg-baby-night/30',
+                    )}
                   />
                 ))}
 
@@ -239,6 +244,7 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
                     return (
                       <NapBar
                         key={`nap-${day.date}-${idx}`}
+                        nightIndicator={showNightIndication}
                         nap={nap}
                         date={day.date}
                         top={top}

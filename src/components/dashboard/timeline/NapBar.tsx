@@ -5,6 +5,7 @@ import { NapSession } from '@/types/baby-log';
 
 interface NapBarProps {
   nap: NapSession;
+  nightIndicator: boolean;
   date: string;
   top: number;
   height: number;
@@ -17,6 +18,7 @@ interface NapBarProps {
 
 export function NapBar({
   nap,
+  nightIndicator,
   date,
   top,
   height,
@@ -27,7 +29,7 @@ export function NapBar({
   formatTimestamp,
 }: NapBarProps) {
   // Use different colors for night vs day sleep
-  const sleepColor = nap.isNightSleep ? '--baby-night' : '--baby-sleep';
+  const sleepColor = nightIndicator && nap.isNightSleep ? '--baby-night' : '--baby-sleep';
 
   const formatDuration = (durationMinutes: number) => {
     const hours = Math.floor(durationMinutes / 60);
@@ -52,7 +54,9 @@ export function NapBar({
           className={cn(
             'absolute left-1 right-1 rounded-md border cursor-pointer p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
             nap.isNightSleep ? 'border-baby-night-foreground/20' : 'border-baby-sleep-foreground/20',
-            !shouldFadeBottom && !shouldFadeTop && (nap.isNightSleep ? 'bg-baby-night/80' : 'bg-baby-sleep/80'),
+            !shouldFadeBottom &&
+              !shouldFadeTop &&
+              (nap.isNightSleep && nightIndicator ? 'bg-baby-night/80' : 'bg-baby-sleep/80'),
           )}
           style={{
             top: `${top}px`,
