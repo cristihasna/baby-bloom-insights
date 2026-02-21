@@ -18,7 +18,7 @@ interface DailyTimelineProps {
 
 const HOUR_HEIGHT = 24; // pixels per hour
 const DAY_MINUTES = 24 * 60;
-const DAY_COLUMN_WIDTH = 40; // pixels per day column
+const DAY_COLUMN_WIDTH = 60; // pixels per day column
 
 function parseTimeToMinutes(time: string): number {
   const [hours, minutes] = time.split(':').map((value) => Number(value));
@@ -65,7 +65,7 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
       day.naps.forEach((nap, idx) => {
         const isFirstNap = idx === 0;
         const { isOverlappingMidnight } = getEventOffsets(nap.startTime, nap.endTime, isFirstNap);
-        
+
         if (isOverlappingMidnight && !isFirstNap) {
           // Add to next day's naps at the beginning
           nextDay.naps.unshift(nap);
@@ -76,7 +76,7 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
       day.feedings.forEach((feeding, idx) => {
         const isFirstFeeding = idx === 0;
         const { isOverlappingMidnight } = getEventOffsets(feeding.startTime, feeding.endTime, isFirstFeeding);
-        
+
         if (isOverlappingMidnight && !isFirstFeeding) {
           // Add to next day's feedings at the beginning
           nextDay.feedings.unshift(feeding);
@@ -98,14 +98,14 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
   // Group consecutive days by week
   const weekGroups = useMemo(() => {
     if (!birthDate) return [];
-    
+
     const groups: { weekLabel: string; startIndex: number; count: number }[] = [];
     let currentWeek: string | null = null;
     let currentGroup: { weekLabel: string; startIndex: number; count: number } | null = null;
 
     processedData.forEach((day, index) => {
       const weekLabel = getWeekLabel(day.date);
-      
+
       if (weekLabel !== currentWeek) {
         if (currentGroup) {
           groups.push(currentGroup);
@@ -150,7 +150,7 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
         {/* Week header row */}
         {birthDate && weekGroups.length > 0 && (
           <div className="flex border-b border-border">
-            <div className="w-16 shrink-0" />
+            <div className="sticky left-0 z-30 w-16 shrink-0 border-r border-border bg-background" />
             {weekGroups.map((group, idx) => (
               <div
                 key={`week-${group.startIndex}-${idx}`}
@@ -158,6 +158,9 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
                 style={{
                   flex: `${group.count} 1 0`,
                   minWidth: `${group.count * DAY_COLUMN_WIDTH}px`,
+                  // simulate padding of multiple columns by increasing left/right padding based on group size
+                  paddingLeft: `${group.count * 0.25}rem`,
+                  paddingRight: `${group.count * 0.25}rem`,
                 }}
               >
                 <div className="text-xs font-medium text-primary">{group.weekLabel}</div>
@@ -168,9 +171,13 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
 
         {/* Day header row */}
         <div className="flex border-b border-border">
-          <div className="w-16 shrink-0" />
+          <div className="sticky left-0 z-30 w-16 shrink-0 border-r border-border bg-background" />
           {processedData.map((day) => (
-            <div key={day.date} className="flex-1 px-1 py-2 text-center border-l border-border" style={{ minWidth: `${DAY_COLUMN_WIDTH}px` }}>
+            <div
+              key={day.date}
+              className="flex-1 px-1 py-2 text-center border-l border-border"
+              style={{ minWidth: `${DAY_COLUMN_WIDTH}px` }}
+            >
               <div className="text-sm font-medium">{format(parseISO(day.date), 'EEE')}</div>
               <div className="text-xs text-muted-foreground">{format(parseISO(day.date), 'MMM d')}</div>
             </div>
@@ -178,7 +185,7 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
         </div>
 
         <div className="flex">
-          <div className="w-16 shrink-0">
+          <div className="sticky left-0 z-20 w-16 shrink-0 border-r border-border bg-background">
             {hours.map((hour) => (
               <div
                 key={hour}
@@ -201,7 +208,11 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
             );
 
             return (
-              <div key={day.date} className="flex-1 relative border-l border-border" style={{ minWidth: `${DAY_COLUMN_WIDTH}px` }}>
+              <div
+                key={day.date}
+                className="flex-1 relative border-l border-border"
+                style={{ minWidth: `${DAY_COLUMN_WIDTH}px` }}
+              >
                 {hours.map((hour) => (
                   <div
                     key={hour}

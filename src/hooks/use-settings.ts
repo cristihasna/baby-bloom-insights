@@ -5,8 +5,8 @@ const STORAGE_KEY = 'baby-log-settings';
 
 const defaultSettings: Settings = {
   birthDate: null,
-  nightStartHour: 19,
-  nightEndHour: 7,
+  nightStartHour: 21,
+  nightEndHour: 8,
   dataEndpoint: '',
 };
 

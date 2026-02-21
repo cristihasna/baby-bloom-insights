@@ -1,14 +1,10 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { NapSession } from '@/types/baby-log';
 
 interface NapBarProps {
-  nap: {
-    startTime: string;
-    endTime: string;
-    rawMessages: string[];
-    isNightSleep: boolean;
-  };
+  nap: NapSession;
   date: string;
   top: number;
   height: number;
@@ -32,15 +28,19 @@ export function NapBar({
 }: NapBarProps) {
   // Use different colors for night vs day sleep
   const sleepColor = nap.isNightSleep ? '--baby-night' : '--baby-sleep';
-  
+
+  const formatDuration = (durationMinutes: number) => {
+    const hours = Math.floor(durationMinutes / 60);
+    const minutes = durationMinutes % 60;
+    return `${hours > 0 ? `${hours}h ` : ''}${minutes}m`;
+  };
+
   const backgroundStyle: React.CSSProperties = {};
   if (shouldFadeBottom) {
-    backgroundStyle.background =
-      `linear-gradient(to bottom, hsl(var(${sleepColor}) / 0.8) 0%, hsl(var(${sleepColor}) / 0.8) 70%, hsl(var(${sleepColor}) / 0) 100%)`;
+    backgroundStyle.background = `linear-gradient(to bottom, hsl(var(${sleepColor}) / 0.8) 0%, hsl(var(${sleepColor}) / 0.8) 70%, hsl(var(${sleepColor}) / 0) 100%)`;
     backgroundStyle.borderBottom = 'none';
   } else if (shouldFadeTop) {
-    backgroundStyle.background =
-      `linear-gradient(to bottom, hsl(var(${sleepColor}) / 0) 0%, hsl(var(${sleepColor}) / 0.8) 30%, hsl(var(${sleepColor}) / 0.8) 100%)`;
+    backgroundStyle.background = `linear-gradient(to bottom, hsl(var(${sleepColor}) / 0) 0%, hsl(var(${sleepColor}) / 0.8) 30%, hsl(var(${sleepColor}) / 0.8) 100%)`;
     backgroundStyle.borderTop = 'none';
   }
 
@@ -64,7 +64,8 @@ export function NapBar({
       </PopoverTrigger>
       <PopoverContent className="w-56 p-2 text-xs">
         <div className="font-medium text-sm">{nap.isNightSleep ? 'Night Sleep' : 'Day Sleep'}</div>
-        <div>Start: {formatTimestamp(date, nap.startTime, startDateOffset)}</div>
+        <div className={cn('font-bold')}>{formatDuration(nap.durationMinutes)}</div>
+        <div className={cn('mt-3')}>Start: {formatTimestamp(date, nap.startTime, startDateOffset)}</div>
         <div>End: {formatTimestamp(date, nap.endTime, endDayOffset)}</div>
         <div className={cn('mt-5')} dangerouslySetInnerHTML={{ __html: nap.rawMessages.join('<br />') }} />
       </PopoverContent>
