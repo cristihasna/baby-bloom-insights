@@ -20,12 +20,17 @@ interface SleepChartProps {
 }
 
 export function SleepChart({ data }: SleepChartProps) {
+  const formatMinutesToHourAndMinutes = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h}h ${m}m`;
+  };
   const chartData = useMemo(() => {
     return data.map((d) => ({
       date: format(parseISO(d.date), 'MMM d'),
-      dayHours: +(d.totalDaySleepTime / 60).toFixed(1),
-      nightHours: +(d.totalNightSleepTime / 60).toFixed(1),
-      totalHours: +((d.totalDaySleepTime + d.totalNightSleepTime) / 60).toFixed(1),
+      dayHours: d.totalDaySleepTime,
+      nightHours: d.totalNightSleepTime24h,
+      totalHours: d.totalSleepTime24h,
     }));
   }, [data]);
 
@@ -52,7 +57,7 @@ export function SleepChart({ data }: SleepChartProps) {
                 borderRadius: '0.75rem',
               }}
               formatter={(value: number, name: string) => [
-                `${value} hours`,
+                `${formatMinutesToHourAndMinutes(value)}`,
                 name === 'dayHours' ? 'Day Sleep' : 'Night Sleep',
               ]}
             />
@@ -73,11 +78,18 @@ export function SleepChart({ data }: SleepChartProps) {
 }
 
 export function NapDurationChart({ data }: SleepChartProps) {
+  const formatMinutesToHourAndMinutes = (minutes: number) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h}h ${m}m`;
+  };
   const chartData = useMemo(() => {
     return data.map((d) => ({
       date: format(parseISO(d.date), 'MMM d'),
       avgDayNapDuration: d.averageDaySleepDuration,
       avgNightSleepDuration: d.averageNightSleepDuration,
+      maxNightSleepDuration: Math.max(...d.naps.filter((n) => n.isNightSleep).map((n) => n.durationMinutes)),
+      maxDayNapDuration: Math.max(...d.naps.filter((n) => !n.isNightSleep).map((n) => n.durationMinutes)),
     }));
   }, [data]);
 
@@ -116,8 +128,10 @@ export function NapDurationChart({ data }: SleepChartProps) {
                 borderRadius: '0.75rem',
               }}
               formatter={(value: number, name: string) => {
-                if (name === 'avgNapDuration') return [`${value} minutes`, 'Avg Day Sleep'];
-                if (name === 'avgNightSleepDuration') return [`${value} minutes`, 'Avg Night Sleep'];
+                if (name === 'maxDayNapDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Max Day Sleep'];
+                if (name === 'maxNightSleepDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Max Night Sleep'];
+                if (name === 'avgNightSleepDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Avg Night Sleep'];
+                if (name === 'avgDayNapDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Avg Day Sleep'];
                 if (name === 'daySessions') return [`${value} sessions`, 'Day Sessions'];
                 if (name === 'nightSessions') return [`${value} sessions`, 'Night Sessions'];
                 return [value, name];
@@ -125,8 +139,10 @@ export function NapDurationChart({ data }: SleepChartProps) {
             />
             <Legend
               formatter={(value) => {
-                if (value === 'avgNapDuration') return 'Avg Day Sleep';
+                if (value === 'maxDayNapDuration') return 'Max Day Sleep';
+                if (value === 'maxNightSleepDuration') return 'Max Night Sleep';
                 if (value === 'avgNightSleepDuration') return 'Avg Night Sleep';
+                if (value === 'avgDayNapDuration') return 'Avg Day Sleep';
                 if (value === 'daySessions') return 'Day Sessions';
                 if (value === 'nightSessions') return 'Night Sessions';
                 return value;
@@ -135,8 +151,17 @@ export function NapDurationChart({ data }: SleepChartProps) {
             <Line
               yAxisId="left"
               type="monotone"
+              dataKey="maxDayNapDuration"
+              name="maxDayNapDuration"
+              stroke="hsl(var(--baby-mint))"
+              strokeWidth={2}
+              dot={{ fill: 'hsl(var(--baby-mint))', strokeWidth: 0, r: 3 }}
+            />
+            <Line
+              yAxisId="left"
+              type="monotone"
               dataKey="avgDayNapDuration"
-              name="avgNapDuration"
+              name="avgDayNapDuration"
               stroke="hsl(var(--baby-feeding))"
               strokeWidth={2}
               dot={{ fill: 'hsl(var(--baby-feeding))', strokeWidth: 0, r: 3 }}
@@ -149,6 +174,15 @@ export function NapDurationChart({ data }: SleepChartProps) {
               stroke="hsl(var(--baby-sleep))"
               strokeWidth={2}
               dot={{ fill: 'hsl(var(--baby-sleep))', strokeWidth: 0, r: 3 }}
+            />
+            <Line
+              yAxisId="left"
+              type="monotone"
+              dataKey="maxNightSleepDuration"
+              name="maxNightSleepDuration"
+              stroke="hsl(var(--baby-dirty))"
+              strokeWidth={2}
+              dot={{ fill: 'hsl(var(--baby-dirty))', strokeWidth: 0, r: 3 }}
             />
           </LineChart>
         </ResponsiveContainer>

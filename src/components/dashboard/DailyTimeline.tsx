@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { addDays, differenceInWeeks, format, parseISO } from 'date-fns';
+import { addDays, differenceInMinutes, differenceInWeeks, format, parseISO } from 'date-fns';
 import { DaySummary, OverlayType } from '@/types/baby-log';
 import { cn } from '@/lib/utils';
 import { NapBar } from './timeline/NapBar';
@@ -17,31 +17,46 @@ interface DailyTimelineProps {
 }
 
 const HOUR_HEIGHT = 24; // pixels per hour
-const DAY_MINUTES = 24 * 60;
 const DAY_COLUMN_WIDTH = 60; // pixels per day column
 
-function parseTimeToMinutes(time: string): number {
-  const [hours, minutes] = time.split(':').map((value) => Number(value));
-  return hours * 60 + minutes;
+function getDayBoundaries(date: string) {
+  const dayStart = parseISO(`${date}T00:00:00`);
+  const dayEnd = addDays(dayStart, 1);
+  return { dayStart, dayEnd };
 }
 
-function getEventOffsets(startTime: string, endTime: string, isFirstEvent: boolean = false) {
-  let startOffset = parseTimeToMinutes(startTime);
-  let endOffset = parseTimeToMinutes(endTime);
-  const isOverlappingMidnight = endOffset <= startOffset;
-  // cap endOffset to 24 hours to prevent excessively long bars when events span multiple days
-  if (isOverlappingMidnight && !isFirstEvent) {
-    endOffset = DAY_MINUTES;
-  } else if (isOverlappingMidnight && isFirstEvent) {
-    startOffset = 0;
+function getEventOffsets(date: string, start: string, end: string) {
+  const { dayStart, dayEnd } = getDayBoundaries(date);
+  const startDate = parseISO(start);
+  let endDate = parseISO(end);
+  if (endDate <= startDate) {
+    endDate = addDays(endDate, 1);
   }
-  return { startOffset, endOffset, isOverlappingMidnight };
+
+  if (startDate >= dayEnd || endDate <= dayStart) {
+    return null;
+  }
+
+  const visibleStart = startDate < dayStart ? dayStart : startDate;
+  const visibleEnd = endDate > dayEnd ? dayEnd : endDate;
+
+  return {
+    startOffset: differenceInMinutes(visibleStart, dayStart),
+    endOffset: differenceInMinutes(visibleEnd, dayStart),
+    shouldFadeTop: startDate < dayStart,
+    shouldFadeBottom: endDate > dayEnd,
+  };
 }
 
-function formatTimestamp(date: string, time: string, dayOffset = 0) {
-  const base = parseISO(`${date}T00:00`);
-  const dated = addDays(base, dayOffset);
-  return `${format(dated, 'MMM d')}, ${time}`;
+function getOffsetWithinDay(date: string, timestamp: string) {
+  const { dayStart, dayEnd } = getDayBoundaries(date);
+  const time = parseISO(timestamp);
+  if (time < dayStart || time >= dayEnd) return null;
+  return differenceInMinutes(time, dayStart);
+}
+
+function formatTimestamp(timestamp: string) {
+  return format(parseISO(timestamp), 'MMM d, HH:mm');
 }
 
 export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, activeOverlays }: DailyTimelineProps) {
@@ -56,33 +71,10 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
       comments: [...day.comments],
     }));
 
-    // Process naps and feedings to split midnight-spanning events
-    for (let i = 0; i < clonedData.length - 1; i++) {
-      const day = clonedData[i];
-      const nextDay = clonedData[i + 1];
-
-      // Process naps
-      day.naps.forEach((nap, idx) => {
-        const isFirstNap = idx === 0;
-        const { isOverlappingMidnight } = getEventOffsets(nap.startTime, nap.endTime, isFirstNap);
-
-        if (isOverlappingMidnight && !isFirstNap) {
-          // Add to next day's naps at the beginning
-          nextDay.naps.unshift(nap);
-        }
-      });
-
-      // Process feedings
-      day.feedings.forEach((feeding, idx) => {
-        const isFirstFeeding = idx === 0;
-        const { isOverlappingMidnight } = getEventOffsets(feeding.startTime, feeding.endTime, isFirstFeeding);
-
-        if (isOverlappingMidnight && !isFirstFeeding) {
-          // Add to next day's feedings at the beginning
-          nextDay.feedings.unshift(feeding);
-        }
-      });
-    }
+    clonedData.forEach((day) => {
+      day.naps.sort((a, b) => a.start.localeCompare(b.start));
+      day.feedings.sort((a, b) => a.start.localeCompare(b.start));
+    });
 
     return clonedData;
   }, [data]);
@@ -147,7 +139,7 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
   const showNightIndication = activeOverlays.includes('nightIndicator');
 
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto overflow-y-hidden">
       <div className="min-w-[800px]">
         {/* Week header row */}
         {birthDate && weekGroups.length > 0 && (
@@ -201,7 +193,7 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
             ))}
           </div>
 
-          {processedData.map((day, dayIndex) => {
+          {processedData.map((day) => {
             const wetDiaperChanges = day.diaperChanges.filter(
               (change) => change.type === 'WET' || change.type === 'WET_AND_DIRTY',
             );
@@ -212,8 +204,11 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
             return (
               <div
                 key={day.date}
-                className="flex-1 relative border-l border-border"
-                style={{ minWidth: `${DAY_COLUMN_WIDTH}px` }}
+                className="relative border-l border-border"
+                style={{
+                  flex: `1 0 ${DAY_COLUMN_WIDTH}px`,
+                  minWidth: `${DAY_COLUMN_WIDTH}px`,
+                }}
               >
                 {hours.map((hour) => (
                   <div
@@ -227,32 +222,20 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
 
                 {activeOverlays.includes('naps') &&
                   day.naps.map((nap, idx) => {
-                    const isFirstNap = idx === 0;
-                    const { startOffset, endOffset, isOverlappingMidnight } = getEventOffsets(
-                      nap.startTime,
-                      nap.endTime,
-                      isFirstNap,
-                    );
+                    const offsets = getEventOffsets(day.date, nap.start, nap.end);
+                    if (!offsets) return null;
+                    const { startOffset, endOffset, shouldFadeTop, shouldFadeBottom } = offsets;
                     const { top, height } = positionFromOffsets(startOffset, endOffset);
-                    const startDateOffset = isOverlappingMidnight && isFirstNap ? -1 : 0;
-                    const endDayOffset = isOverlappingMidnight && !isFirstNap ? 1 : 0;
-
-                    // Determine fade effects for continuity
-                    const shouldFadeBottom = isOverlappingMidnight && !isFirstNap;
-                    const shouldFadeTop = isFirstNap && isOverlappingMidnight;
 
                     return (
                       <NapBar
                         key={`nap-${day.date}-${idx}`}
                         nightIndicator={showNightIndication}
                         nap={nap}
-                        date={day.date}
                         top={top}
                         height={height ?? 0}
                         shouldFadeBottom={shouldFadeBottom}
                         shouldFadeTop={shouldFadeTop}
-                        startDateOffset={startDateOffset}
-                        endDayOffset={endDayOffset}
                         formatTimestamp={formatTimestamp}
                       />
                     );
@@ -260,29 +243,19 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
 
                 {activeOverlays.includes('feedings') &&
                   day.feedings.map((feeding, idx) => {
-                    const isFirstFeeding = idx === 0;
-                    const { startOffset, endOffset, isOverlappingMidnight } = getEventOffsets(
-                      feeding.startTime,
-                      feeding.endTime,
-                      isFirstFeeding,
-                    );
+                    const offsets = getEventOffsets(day.date, feeding.start, feeding.end);
+                    if (!offsets) return null;
+                    const { startOffset, endOffset, shouldFadeTop, shouldFadeBottom } = offsets;
                     const { top, height } = positionFromOffsets(startOffset, endOffset);
-                    const dayOffset = endOffset > DAY_MINUTES ? 1 : 0;
-
-                    // Determine fade effects for continuity
-                    const shouldFadeBottom = isOverlappingMidnight && !isFirstFeeding;
-                    const shouldFadeTop = isFirstFeeding && isOverlappingMidnight;
 
                     return (
                       <FeedingBar
                         key={`feeding-${day.date}-${idx}`}
                         feeding={feeding}
-                        date={day.date}
                         top={top}
                         height={height ?? 0}
                         shouldFadeBottom={shouldFadeBottom}
                         shouldFadeTop={shouldFadeTop}
-                        dayOffset={dayOffset}
                         formatTimestamp={formatTimestamp}
                       />
                     );
@@ -290,14 +263,14 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
 
                 {activeOverlays.includes('wetDiapers') &&
                   wetDiaperChanges.map((change, idx) => {
-                    const offsetMinutes = parseTimeToMinutes(change.time);
+                    const offsetMinutes = getOffsetWithinDay(day.date, change.time);
+                    if (offsetMinutes === null) return null;
                     const { top } = positionFromOffsets(offsetMinutes);
 
                     return (
                       <WetDiaperIndicator
                         key={`wet-${day.date}-${idx}`}
                         time={change.time}
-                        date={day.date}
                         top={top}
                         formatTimestamp={formatTimestamp}
                       />
@@ -306,14 +279,14 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
 
                 {activeOverlays.includes('dirtyDiapers') &&
                   dirtyDiaperChanges.map((change, idx) => {
-                    const offsetMinutes = parseTimeToMinutes(change.time);
+                    const offsetMinutes = getOffsetWithinDay(day.date, change.time);
+                    if (offsetMinutes === null) return null;
                     const { top } = positionFromOffsets(offsetMinutes);
 
                     return (
                       <DirtyDiaperIndicator
                         key={`dirty-${day.date}-${idx}`}
                         time={change.time}
-                        date={day.date}
                         top={top}
                         formatTimestamp={formatTimestamp}
                       />
@@ -322,14 +295,14 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
 
                 {activeOverlays.includes('comments') &&
                   day.comments.map((comment, idx) => {
-                    const offsetMinutes = parseTimeToMinutes(comment.time);
+                    const offsetMinutes = getOffsetWithinDay(day.date, comment.time);
+                    if (offsetMinutes === null) return null;
                     const { top } = positionFromOffsets(offsetMinutes);
 
                     return (
                       <CommentIndicator
                         key={`comment-${day.date}-${idx}`}
                         comment={comment}
-                        date={day.date}
                         top={top}
                         formatTimestamp={formatTimestamp}
                       />

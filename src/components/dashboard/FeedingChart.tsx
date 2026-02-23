@@ -21,7 +21,7 @@ export function FeedingChart({ data }: FeedingChartProps) {
     return data.map((d) => ({
       date: format(parseISO(d.date), 'MMM d'),
       sessions: d.feedingSessions,
-      duration: Math.round(d.totalFeedingTime / d.feedingSessions) || 0,
+      duration: Math.round(d.totalFeedingTime24h / d.feedingSessions) || 0,
     }));
   }, [data]);
 

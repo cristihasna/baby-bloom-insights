@@ -6,26 +6,18 @@ import {
   FeedingSession,
   NapSession,
 } from '@/types/baby-log';
-import { addDays, differenceInWeeks, format, subDays } from 'date-fns';
+import { addDays, addMinutes, differenceInWeeks, format, parseISO, startOfDay, subDays } from 'date-fns';
 
 function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-function minutesToClock(minutes: number): string {
-  const normalized = ((minutes % 1440) + 1440) % 1440;
-  const hh = Math.floor(normalized / 60);
-  const mm = normalized % 60;
-  return `${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
+function toIsoLocalDateTime(value: Date): string {
+  return format(value, "yyyy-MM-dd'T'HH:mm:ss");
 }
 
-function durationBetween(startTime: string, endTime: string): number {
-  const [startHour, startMinute] = startTime.split(':').map(Number);
-  const [endHour, endMinute] = endTime.split(':').map(Number);
-  const start = startHour * 60 + startMinute;
-  let end = endHour * 60 + endMinute;
-  if (end <= start) end += 1440;
-  return end - start;
+function minutesToIso(date: Date, minutes: number): string {
+  return toIsoLocalDateTime(addMinutes(startOfDay(date), minutes));
 }
 
 function isNightMinute(minute: number, nightStart: number, nightEnd: number): boolean {
@@ -37,6 +29,7 @@ function isNightMinute(minute: number, nightStart: number, nightEnd: number): bo
 }
 
 function generateNaps(
+  date: Date,
   ageWeeks: number,
   nightStart: number,
   nightEnd: number
@@ -53,13 +46,11 @@ function generateNaps(
     const startMinute = baseStart + randomInt(0, 30);
     const durationMinutes = randomInt(30, 120);
     const endMinute = startMinute + durationMinutes;
-    const startTime = minutesToClock(startMinute);
-    const endTime = minutesToClock(endMinute);
     const isNightSleep = isNightMinute(startMinute, nightStart, nightEnd);
 
     return {
-      startTime,
-      endTime,
+      start: minutesToIso(date, startMinute),
+      end: minutesToIso(date, endMinute),
       durationMinutes,
       isNightSleep,
       rawMessages: [`Nap started (${idx + 1})`, `Nap ended (${idx + 1})`],
@@ -71,17 +62,17 @@ function generateNaps(
   const nightDuration = randomInt(120, 240);
   const nightEndMinute = nightStartMinute + nightDuration;
   naps.push({
-    startTime: minutesToClock(nightStartMinute),
-    endTime: minutesToClock(nightEndMinute),
+    start: minutesToIso(date, nightStartMinute),
+    end: minutesToIso(date, nightEndMinute),
     durationMinutes: nightDuration,
     isNightSleep: true,
     rawMessages: ['Night sleep started', 'Night sleep ended'],
   });
 
-  return naps.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  return naps.sort((a, b) => a.start.localeCompare(b.start));
 }
 
-function generateFeedings(ageWeeks: number): FeedingSession[] {
+function generateFeedings(date: Date, ageWeeks: number): FeedingSession[] {
   const feedingCount =
     ageWeeks < 4
       ? randomInt(9, 11)
@@ -99,8 +90,8 @@ function generateFeedings(ageWeeks: number): FeedingSession[] {
     const endMinute = startMinute + durationMinutes;
 
     feedings.push({
-      startTime: minutesToClock(startMinute),
-      endTime: minutesToClock(endMinute),
+      start: minutesToIso(date, startMinute),
+      end: minutesToIso(date, endMinute),
       durationMinutes,
       rawMessages: [`Feeding started (${i + 1})`, `Feeding stopped (${i + 1})`],
     });
@@ -108,10 +99,10 @@ function generateFeedings(ageWeeks: number): FeedingSession[] {
     cursor += interval;
   }
 
-  return feedings.sort((a, b) => a.startTime.localeCompare(b.startTime));
+  return feedings.sort((a, b) => a.start.localeCompare(b.start));
 }
 
-function generateDiaperChanges(): DiaperChange[] {
+function generateDiaperChanges(date: Date): DiaperChange[] {
   const count = randomInt(8, 13);
   const types: DiaperChangeType[] = ['WET', 'DIRTY', 'WET_AND_DIRTY'];
   const changes: DiaperChange[] = [];
@@ -121,7 +112,7 @@ function generateDiaperChanges(): DiaperChange[] {
     const type =
       Math.random() < 0.55 ? types[0] : Math.random() < 0.85 ? types[1] : types[2];
     changes.push({
-      time: minutesToClock(minute),
+      time: minutesToIso(date, minute),
       type,
       rawMessage: `Diaper changed (${type})`,
     });
@@ -139,13 +130,13 @@ const COMMENT_TEMPLATES = [
   'Short walk outside.',
 ];
 
-function generateComments(): Comment[] {
+function generateComments(date: Date): Comment[] {
   const count = Math.random() > 0.7 ? randomInt(1, 2) : 0;
   const comments: Comment[] = [];
 
   for (let i = 0; i < count; i++) {
     comments.push({
-      time: minutesToClock(randomInt(7 * 60, 21 * 60)),
+      time: minutesToIso(date, randomInt(7 * 60, 21 * 60)),
       message: COMMENT_TEMPLATES[randomInt(0, COMMENT_TEMPLATES.length - 1)],
     });
   }
@@ -159,26 +150,24 @@ function average(values: number[]): number {
 }
 
 function timeToMinutes(value: string): number {
-  const [hours, minutes] = value.split(':').map(Number);
-  return hours * 60 + minutes;
+  return Math.floor(parseISO(value).getTime() / 60000);
 }
 
 function averageGapBetweenSessions(
-  sessions: { startTime: string; endTime: string; isNightSleep?: boolean }[],
+  sessions: { start: string; end: string; isNightSleep?: boolean }[],
   mode: 'all' | 'day' | 'night'
 ): number {
   if (sessions.length < 2) return 0;
 
-  const sorted = [...sessions].sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const sorted = [...sessions].sort((a, b) => a.start.localeCompare(b.start));
   const gaps: number[] = [];
 
   for (let i = 1; i < sorted.length; i++) {
     const previous = sorted[i - 1];
     const current = sorted[i];
 
-    let prevEnd = timeToMinutes(previous.endTime);
-    const currStart = timeToMinutes(current.startTime);
-    if (prevEnd > currStart) prevEnd -= 1440;
+    const prevEnd = timeToMinutes(previous.end);
+    const currStart = timeToMinutes(current.start);
     const gap = Math.max(0, currStart - prevEnd);
 
     if (mode === 'all') {
@@ -201,19 +190,19 @@ function generateDaySummary(
   nightEndHour = 7
 ): DaySummary {
   const ageWeeks = Math.max(0, differenceInWeeks(date, birthDate));
-  const naps = generateNaps(ageWeeks, nightStartHour, nightEndHour);
-  const feedings = generateFeedings(ageWeeks);
-  const diaperChanges = generateDiaperChanges();
-  const comments = generateComments();
+  const naps = generateNaps(date, ageWeeks, nightStartHour, nightEndHour);
+  const feedings = generateFeedings(date, ageWeeks);
+  const diaperChanges = generateDiaperChanges(date);
+  const comments = generateComments(date);
 
   const dayNaps = naps.filter((nap) => !nap.isNightSleep);
   const nightNaps = naps.filter((nap) => nap.isNightSleep);
   const totalDaySleepTime = dayNaps.reduce((sum, nap) => sum + nap.durationMinutes, 0);
-  const totalNightSleepTime = nightNaps.reduce(
+  const totalNightSleepTime24h = nightNaps.reduce(
     (sum, nap) => sum + nap.durationMinutes,
     0
   );
-  const totalFeedingTime = feedings.reduce(
+  const totalFeedingTime24h = feedings.reduce(
     (sum, feeding) => sum + feeding.durationMinutes,
     0
   );
@@ -232,13 +221,13 @@ function generateDaySummary(
 
   return {
     date: format(date, 'yyyy-MM-dd'),
-    totalSleepTime: totalDaySleepTime + totalNightSleepTime,
-    totalFeedingTime,
+    totalSleepTime24h: totalDaySleepTime + totalNightSleepTime24h,
+    totalNightSleepTime24h,
+    totalFeedingTime24h,
     wetDiaperChanges,
     dirtyDiaperChanges,
     mixedDiaperChanges,
     totalDiaperChanges: diaperChanges.length,
-    totalNightSleepTime,
     totalDaySleepTime,
     napSessions: naps.length,
     averageDaySleepDuration: average(dayNaps.map((nap) => nap.durationMinutes)),

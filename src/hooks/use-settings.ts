@@ -7,7 +7,6 @@ const defaultSettings: Settings = {
   birthDate: null,
   nightStartHour: 21,
   nightEndHour: 8,
-  dataEndpoint: '',
 };
 
 export function useSettings() {

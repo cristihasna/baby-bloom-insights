@@ -1,13 +1,13 @@
 export interface FeedingSession {
-  startTime: string; // HH:MM format
-  endTime: string; // HH:MM format
+  start: string; // ISO local datetime: YYYY-MM-DDTHH:mm:ss
+  end: string; // ISO local datetime: YYYY-MM-DDTHH:mm:ss
   durationMinutes: number;
   rawMessages: string[]; // Original messages for start and stop events
 }
 
 export interface NapSession {
-  startTime: string; // HH:MM format
-  endTime: string; // HH:MM format
+  start: string; // ISO local datetime: YYYY-MM-DDTHH:mm:ss
+  end: string; // ISO local datetime: YYYY-MM-DDTHH:mm:ss
   durationMinutes: number;
   isNightSleep: boolean; // true if during night hours (19:00-07:00)
   rawMessages: string[]; // Original messages for start and stop events
@@ -16,26 +16,26 @@ export interface NapSession {
 export type DiaperChangeType = 'WET' | 'DIRTY' | 'WET_AND_DIRTY';
 
 export interface DiaperChange {
-  time: string; // HH:MM format
+  time: string; // ISO local datetime: YYYY-MM-DDTHH:mm:ss
   type: DiaperChangeType;
   rawMessage: string; // Original message for the diaper change event
 }
 
 export interface Comment {
-  time: string; // HH:MM format
+  time: string; // ISO local datetime: YYYY-MM-DDTHH:mm:ss
   message: string;
 }
 
 export interface DaySummary {
   date: string; // YYYY-MM-DD format
-  totalSleepTime: number; // minutes
-  totalFeedingTime: number; // minutes
+  totalSleepTime24h: number; // minutes
+  totalNightSleepTime24h: number; // minutes
+  totalFeedingTime24h: number; // minutes
+  totalDaySleepTime: number; // minutes
   wetDiaperChanges: number;
   dirtyDiaperChanges: number;
   mixedDiaperChanges: number; // WET_AND_DIRTY
   totalDiaperChanges: number; // Total number ofdiaper changes in a day
-  totalNightSleepTime: number; // minutes (19:00-07:00)
-  totalDaySleepTime: number; // minutes (07:00-19:00)
   napSessions: number;
   averageDaySleepDuration: number; // minutes per nap during day
   averageDayWakeDuration: number; // minutes awake between naps during day
@@ -55,7 +55,6 @@ export interface Settings {
   birthDate: string | null; // YYYY-MM-DD format
   nightStartHour: number; // 0-23
   nightEndHour: number; // 0-23
-  dataEndpoint: string;
 }
 
 export interface DateRange {

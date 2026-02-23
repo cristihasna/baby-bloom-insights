@@ -6,26 +6,20 @@ import { NapSession } from '@/types/baby-log';
 interface NapBarProps {
   nap: NapSession;
   nightIndicator: boolean;
-  date: string;
   top: number;
   height: number;
   shouldFadeBottom: boolean;
   shouldFadeTop: boolean;
-  startDateOffset: number;
-  endDayOffset: number;
-  formatTimestamp: (date: string, time: string, dayOffset?: number) => string;
+  formatTimestamp: (timestamp: string) => string;
 }
 
 export function NapBar({
   nap,
   nightIndicator,
-  date,
   top,
   height,
   shouldFadeBottom,
   shouldFadeTop,
-  startDateOffset,
-  endDayOffset,
   formatTimestamp,
 }: NapBarProps) {
   // Use different colors for night vs day sleep
@@ -41,9 +35,13 @@ export function NapBar({
   if (shouldFadeBottom) {
     backgroundStyle.background = `linear-gradient(to bottom, hsl(var(${sleepColor}) / 0.8) 0%, hsl(var(${sleepColor}) / 0.8) 70%, hsl(var(${sleepColor}) / 0) 100%)`;
     backgroundStyle.borderBottom = 'none';
+    backgroundStyle.borderBottomLeftRadius = '0';
+    backgroundStyle.borderBottomRightRadius = '0';
   } else if (shouldFadeTop) {
     backgroundStyle.background = `linear-gradient(to bottom, hsl(var(${sleepColor}) / 0) 0%, hsl(var(${sleepColor}) / 0.8) 30%, hsl(var(${sleepColor}) / 0.8) 100%)`;
     backgroundStyle.borderTop = 'none';
+    backgroundStyle.borderTopLeftRadius = '0';
+    backgroundStyle.borderTopRightRadius = '0';
   }
 
   return (
@@ -63,14 +61,14 @@ export function NapBar({
             height: `${Math.max(height, 4)}px`,
             ...backgroundStyle,
           }}
-          aria-label={`${nap.isNightSleep ? 'Night' : 'Day'} Sleep ${formatTimestamp(date, nap.startTime, startDateOffset)} to ${formatTimestamp(date, nap.endTime, endDayOffset)}`}
+          aria-label={`${nap.isNightSleep ? 'Night' : 'Day'} Sleep ${formatTimestamp(nap.start)} to ${formatTimestamp(nap.end)}`}
         />
       </PopoverTrigger>
       <PopoverContent className="w-56 p-2 text-xs">
         <div className="font-medium text-sm">{nap.isNightSleep ? 'Night Sleep' : 'Day Sleep'}</div>
         <div className={cn('font-bold')}>{formatDuration(nap.durationMinutes)}</div>
-        <div className={cn('mt-3')}>Start: {formatTimestamp(date, nap.startTime, startDateOffset)}</div>
-        <div>End: {formatTimestamp(date, nap.endTime, endDayOffset)}</div>
+        <div className={cn('mt-3')}>Start: {formatTimestamp(nap.start)}</div>
+        <div>End: {formatTimestamp(nap.end)}</div>
         <div className={cn('mt-5')} dangerouslySetInnerHTML={{ __html: nap.rawMessages.join('<br />') }} />
       </PopoverContent>
     </Popover>

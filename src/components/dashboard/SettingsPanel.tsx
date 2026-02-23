@@ -98,21 +98,6 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
               Define when night sleep starts and ends
             </p>
           </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="endpoint">Data Endpoint (Optional)</Label>
-            <Input
-              id="endpoint"
-              type="url"
-              placeholder="https://api.example.com/baby-log"
-              value={settings.dataEndpoint}
-              onChange={(e) => onUpdateSettings({ dataEndpoint: e.target.value })}
-              className="rounded-xl"
-            />
-            <p className="text-xs text-muted-foreground">
-              For future API integration
-            </p>
-          </div>
         </div>
       </SheetContent>
     </Sheet>

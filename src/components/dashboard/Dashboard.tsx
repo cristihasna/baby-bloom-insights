@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { Baby, LogOut } from 'lucide-react';
@@ -21,17 +21,56 @@ import { NightWakeUpsChart } from './NightWakeUpsChart';
 import { FeedingChart } from './FeedingChart';
 import { WakeWindowChart } from './WakeWindowChart';
 
+const ACTIVE_OVERLAYS_STORAGE_KEY = 'baby-log-active-overlays';
+
+const DEFAULT_ACTIVE_OVERLAYS: OverlayType[] = ['naps', 'feedings', 'comments'];
+
+const VALID_OVERLAYS: OverlayType[] = [
+  'naps',
+  'feedings',
+  'wetDiapers',
+  'dirtyDiapers',
+  'comments',
+  'nightIndicator',
+];
+
+function isOverlayType(value: unknown): value is OverlayType {
+  return typeof value === 'string' && VALID_OVERLAYS.includes(value as OverlayType);
+}
+
 export function Dashboard() {
   const { apiToken, signOut } = useAuth();
   const { settings, updateSettings } = useSettings();
   const { dateRange, setPreset, setCustomRange, presetOptions } = useDateRange(
     settings.birthDate
   );
-  const [activeOverlays, setActiveOverlays] = useState<OverlayType[]>([
-    'naps',
-    'feedings',
-    'comments',
-  ]);
+  const [activeOverlays, setActiveOverlays] = useState<OverlayType[]>(() => {
+    if (typeof window === 'undefined') return DEFAULT_ACTIVE_OVERLAYS;
+
+    try {
+      const stored = localStorage.getItem(ACTIVE_OVERLAYS_STORAGE_KEY);
+      if (!stored) return DEFAULT_ACTIVE_OVERLAYS;
+
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) return DEFAULT_ACTIVE_OVERLAYS;
+
+      const overlays = parsed.filter(isOverlayType);
+      if (overlays.length !== parsed.length) return DEFAULT_ACTIVE_OVERLAYS;
+
+      return overlays;
+    } catch (e) {
+      console.error('Failed to load active overlays from localStorage:', e);
+      return DEFAULT_ACTIVE_OVERLAYS;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ACTIVE_OVERLAYS_STORAGE_KEY, JSON.stringify(activeOverlays));
+    } catch (e) {
+      console.error('Failed to save active overlays to localStorage:', e);
+    }
+  }, [activeOverlays]);
 
   const toggleOverlay = (overlay: OverlayType) => {
     setActiveOverlays((prev) =>
@@ -107,7 +146,7 @@ export function Dashboard() {
           <Card className="rounded-2xl border-destructive/30">
             <CardContent className="py-6 space-y-4">
               <p className="text-sm text-destructive text-center">
-                Failed to load logs from API. Check authentication and endpoint settings.
+                Failed to load logs from API. Check your authentication settings.
               </p>
               <div className="flex justify-center">
                 <Button type="button" variant="outline" onClick={() => logsQuery.refetch()}>

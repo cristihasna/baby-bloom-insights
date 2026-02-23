@@ -1,29 +1,23 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { FeedingSession } from '@/types/baby-log';
 
 interface FeedingBarProps {
-  feeding: {
-    startTime: string;
-    endTime: string;
-  };
-  date: string;
+  feeding: FeedingSession;
   top: number;
   height: number;
   shouldFadeBottom: boolean;
   shouldFadeTop: boolean;
-  dayOffset: number;
-  formatTimestamp: (date: string, time: string, dayOffset?: number) => string;
+  formatTimestamp: (timestamp: string) => string;
 }
 
 export function FeedingBar({
   feeding,
-  date,
   top,
   height,
   shouldFadeBottom,
   shouldFadeTop,
-  dayOffset,
   formatTimestamp,
 }: FeedingBarProps) {
   const backgroundStyle: React.CSSProperties = {};
@@ -49,13 +43,13 @@ export function FeedingBar({
             height: `${Math.max(height, 3)}px`,
             ...backgroundStyle,
           }}
-          aria-label={`Feeding ${formatTimestamp(date, feeding.startTime)} to ${formatTimestamp(date, feeding.endTime, dayOffset)}`}
+          aria-label={`Feeding ${formatTimestamp(feeding.start)} to ${formatTimestamp(feeding.end)}`}
         />
       </PopoverTrigger>
       <PopoverContent className="w-56 p-2 text-xs">
         <div className="font-medium text-sm">Feeding</div>
-        <div>Start: {formatTimestamp(date, feeding.startTime)}</div>
-        <div>End: {formatTimestamp(date, feeding.endTime, dayOffset)}</div>
+        <div>Start: {formatTimestamp(feeding.start)}</div>
+        <div>End: {formatTimestamp(feeding.end)}</div>
       </PopoverContent>
     </Popover>
   );
