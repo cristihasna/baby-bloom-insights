@@ -6,20 +6,20 @@ import { NapSession } from '@/types/baby-log';
 interface NapBarProps {
   nap: NapSession;
   nightIndicator: boolean;
-  top: number;
-  height: number;
-  shouldFadeBottom: boolean;
-  shouldFadeTop: boolean;
+  left: string;
+  width: string;
+  shouldFadeEnd: boolean;
+  shouldFadeStart: boolean;
   formatTimestamp: (timestamp: string) => string;
 }
 
 export function NapBar({
   nap,
   nightIndicator,
-  top,
-  height,
-  shouldFadeBottom,
-  shouldFadeTop,
+  left,
+  width,
+  shouldFadeEnd,
+  shouldFadeStart,
   formatTimestamp,
 }: NapBarProps) {
   // Use different colors for night vs day sleep
@@ -32,16 +32,16 @@ export function NapBar({
   };
 
   const backgroundStyle: React.CSSProperties = {};
-  if (shouldFadeBottom) {
-    backgroundStyle.background = `linear-gradient(to bottom, hsl(var(${sleepColor}) / 0.8) 0%, hsl(var(${sleepColor}) / 0.8) 70%, hsl(var(${sleepColor}) / 0) 100%)`;
-    backgroundStyle.borderBottom = 'none';
-    backgroundStyle.borderBottomLeftRadius = '0';
-    backgroundStyle.borderBottomRightRadius = '0';
-  } else if (shouldFadeTop) {
-    backgroundStyle.background = `linear-gradient(to bottom, hsl(var(${sleepColor}) / 0) 0%, hsl(var(${sleepColor}) / 0.8) 30%, hsl(var(${sleepColor}) / 0.8) 100%)`;
-    backgroundStyle.borderTop = 'none';
-    backgroundStyle.borderTopLeftRadius = '0';
+  if (shouldFadeEnd) {
+    backgroundStyle.background = `linear-gradient(to right, hsl(var(${sleepColor}) / 0.8) 0%, hsl(var(${sleepColor}) / 0.8) 70%, hsl(var(${sleepColor}) / 0) 100%)`;
+    backgroundStyle.borderRight = 'none';
     backgroundStyle.borderTopRightRadius = '0';
+    backgroundStyle.borderBottomRightRadius = '0';
+  } else if (shouldFadeStart) {
+    backgroundStyle.background = `linear-gradient(to right, hsl(var(${sleepColor}) / 0) 0%, hsl(var(${sleepColor}) / 0.8) 30%, hsl(var(${sleepColor}) / 0.8) 100%)`;
+    backgroundStyle.borderLeft = 'none';
+    backgroundStyle.borderTopLeftRadius = '0';
+    backgroundStyle.borderBottomLeftRadius = '0';
   }
 
   return (
@@ -50,15 +50,15 @@ export function NapBar({
         <button
           type="button"
           className={cn(
-            'absolute left-1 right-1 rounded-md border cursor-pointer p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
+            'absolute top-[0.25rem] bottom-[0.25rem] z-10 rounded-md border cursor-pointer p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40',
             nap.isNightSleep ? 'border-baby-night-foreground/20' : 'border-baby-sleep-foreground/20',
-            !shouldFadeBottom &&
-              !shouldFadeTop &&
+            !shouldFadeEnd &&
+              !shouldFadeStart &&
               (nap.isNightSleep && nightIndicator ? 'bg-baby-night/80' : 'bg-baby-sleep/80'),
           )}
           style={{
-            top: `${top}px`,
-            height: `${Math.max(height, 4)}px`,
+            left,
+            width: `max(${width}, 6px)`,
             ...backgroundStyle,
           }}
           aria-label={`${nap.isNightSleep ? 'Night' : 'Day'} Sleep ${formatTimestamp(nap.start)} to ${formatTimestamp(nap.end)}`}

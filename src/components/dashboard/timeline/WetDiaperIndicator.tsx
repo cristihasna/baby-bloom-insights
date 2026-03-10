@@ -3,18 +3,18 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 interface WetDiaperIndicatorProps {
   time: string;
-  top: number;
+  left: string;
   formatTimestamp: (timestamp: string) => string;
 }
 
-export function WetDiaperIndicator({ time, top, formatTimestamp }: WetDiaperIndicatorProps) {
+export function WetDiaperIndicator({ time, left, formatTimestamp }: WetDiaperIndicatorProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="absolute left-0.5 text-baby-wet cursor-pointer bg-white/40 hover:bg-white/60 rounded-full p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 border border-baby-wet/50 -translate-y-1/2"
-          style={{ top: `${top + 2}px` }}
+          className="absolute top-0 z-20 text-baby-wet cursor-pointer bg-white/40 hover:bg-white/60 rounded-full p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 border border-baby-wet/50 -translate-x-1/2"
+          style={{ left: `calc(${left} + 2px)` }}
           aria-label={`Wet diaper at ${formatTimestamp(time)}`}
         >
           <Droplets className="h-5 w-5" />

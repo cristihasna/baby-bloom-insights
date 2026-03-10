@@ -6,18 +6,18 @@ interface CommentIndicatorProps {
     time: string;
     message: string;
   };
-  top: number;
+  left: string;
   formatTimestamp: (timestamp: string) => string;
 }
 
-export function CommentIndicator({ comment, top, formatTimestamp }: CommentIndicatorProps) {
+export function CommentIndicator({ comment, left, formatTimestamp }: CommentIndicatorProps) {
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="absolute left-1/2 -translate-x-1/2 text-black/40 cursor-pointer bg-white/40 hover:bg-white/60 rounded-full p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 border border-baby-mint/50 -translate-y-1/2"
-          style={{ top: `${top + 2}px` }}
+          className="absolute top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 text-black/40 cursor-pointer bg-white/40 hover:bg-white/60 rounded-full p-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 border border-baby-mint/50"
+          style={{ left: `calc(${left} + 2px)` }}
           aria-label={`Comment at ${formatTimestamp(comment.time)}`}
         >
           <MessageCircle className="h-5 w-5" />

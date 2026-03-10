@@ -16,8 +16,11 @@ interface DailyTimelineProps {
   activeOverlays: OverlayType[];
 }
 
-const HOUR_HEIGHT = 24; // pixels per hour
-const DAY_COLUMN_WIDTH = 60; // pixels per day column
+const HOUR_COLUMN_MIN_WIDTH = 48; // minimum pixels per hour column
+const DAY_ROW_HEIGHT = 48; // pixels per day row
+const DAY_LABEL_WIDTH = 72; // pixels for the sticky day label column
+const WEEK_LABEL_WIDTH = 48; // pixels for the sticky week label column
+const TOTAL_DAY_MINUTES = 24 * 60;
 
 function getDayBoundaries(date: string) {
   const dayStart = parseISO(`${date}T00:00:00`);
@@ -43,8 +46,8 @@ function getEventOffsets(date: string, start: string, end: string) {
   return {
     startOffset: differenceInMinutes(visibleStart, dayStart),
     endOffset: differenceInMinutes(visibleEnd, dayStart),
-    shouldFadeTop: startDate < dayStart,
-    shouldFadeBottom: endDate > dayEnd,
+    shouldFadeStart: startDate < dayStart,
+    shouldFadeEnd: endDate > dayEnd,
   };
 }
 
@@ -89,29 +92,20 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
 
   // Group consecutive days by week
   const weekGroups = useMemo(() => {
-    if (!birthDate) return [];
-
-    const groups: { weekLabel: string; startIndex: number; count: number }[] = [];
-    let currentWeek: string | null = null;
-    let currentGroup: { weekLabel: string; startIndex: number; count: number } | null = null;
+    const groups: { weekLabel: string | null; startIndex: number; count: number; days: DaySummary[] }[] = [];
+    let currentGroup: { weekLabel: string | null; startIndex: number; count: number; days: DaySummary[] } | null = null;
 
     processedData.forEach((day, index) => {
-      const weekLabel = getWeekLabel(day.date);
+      const weekLabel = birthDate ? getWeekLabel(day.date) : null;
 
-      if (weekLabel !== currentWeek) {
-        if (currentGroup) {
-          groups.push(currentGroup);
-        }
-        currentWeek = weekLabel;
-        currentGroup = weekLabel ? { weekLabel, startIndex: index, count: 1 } : null;
-      } else if (currentGroup) {
+      if (!currentGroup || currentGroup.weekLabel !== weekLabel) {
+        currentGroup = { weekLabel, startIndex: index, count: 1, days: [day] };
+        groups.push(currentGroup);
+      } else {
         currentGroup.count++;
+        currentGroup.days.push(day);
       }
     });
-
-    if (currentGroup) {
-      groups.push(currentGroup);
-    }
 
     return groups;
   }, [birthDate, processedData, getWeekLabel]);
@@ -130,184 +124,199 @@ export function DailyTimeline({ data, birthDate, nightStartHour, nightEndHour, a
   };
 
   const positionFromOffsets = (startOffset: number, endOffset?: number) => {
-    const top = (startOffset / 60) * HOUR_HEIGHT;
-    const height = endOffset !== undefined ? ((endOffset - startOffset) / 60) * HOUR_HEIGHT : undefined;
+    const left = `${(startOffset / TOTAL_DAY_MINUTES) * 100}%`;
+    const width = endOffset !== undefined ? `${((endOffset - startOffset) / TOTAL_DAY_MINUTES) * 100}%` : undefined;
 
-    return { top, height };
+    return { left, width };
   };
 
   const showNightIndication = activeOverlays.includes('nightIndicator');
+  const hourColumnPercent = 100 / hours.length;
+  const timelineMinWidth = hours.length * HOUR_COLUMN_MIN_WIDTH;
 
   return (
-    <div className="overflow-x-auto overflow-y-hidden">
-      <div className="min-w-[800px]">
-        {/* Week header row */}
-        {birthDate && weekGroups.length > 0 && (
-          <div className="flex border-b border-border">
-            <div className="sticky left-0 z-30 w-16 shrink-0 border-r border-border bg-background" />
-            {weekGroups.map((group, idx) => (
-              <div
-                key={`week-${group.startIndex}-${idx}`}
-                className="flex items-center justify-center py-1 px-1 text-center border-l border-border bg-primary/5"
-                style={{
-                  flex: `${group.count} 1 0`,
-                  minWidth: `${group.count * DAY_COLUMN_WIDTH}px`,
-                  // simulate padding of multiple columns by increasing left/right padding based on group size
-                  paddingLeft: `${group.count * 0.25}rem`,
-                  paddingRight: `${group.count * 0.25}rem`,
-                }}
-              >
-                <div className="text-xs font-medium text-primary">{group.weekLabel}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Day header row */}
-        <div className="flex border-b border-border">
-          <div className="sticky left-0 z-30 w-16 shrink-0 border-r border-border bg-background" />
-          {processedData.map((day) => (
-            <div
-              key={day.date}
-              className="flex-1 px-1 py-2 text-center border-l border-border"
-              style={{ minWidth: `${DAY_COLUMN_WIDTH}px` }}
-            >
-              <div className="text-sm font-medium">{format(parseISO(day.date), 'EEE')}</div>
-              <div className="text-xs text-muted-foreground">{format(parseISO(day.date), 'MMM d')}</div>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex">
-          <div className="sticky left-0 z-20 w-16 shrink-0 border-r border-border bg-background">
+    <div className="max-h-[36rem] overflow-auto">
+      <div className="min-w-max">
+        <div className="sticky top-0 z-30 flex border-b border-border bg-background">
+          <div
+            className="sticky left-0 z-40 shrink-0 border-r border-border bg-background"
+            style={{ width: `${DAY_LABEL_WIDTH}px`, minWidth: `${DAY_LABEL_WIDTH}px` }}
+          />
+          <div className="flex flex-1 min-w-0" style={{ minWidth: `${timelineMinWidth}px` }}>
             {hours.map((hour) => (
               <div
                 key={hour}
                 className={cn(
-                  'h-6 flex items-center justify-end pr-2 text-xs text-muted-foreground',
-                  isNightHour(hour) && showNightIndication && 'bg-baby-night/30',
+                  'flex h-12 items-center justify-center border-l border-border text-xs text-muted-foreground',
+                  showNightIndication && isNightHour(hour) && 'bg-baby-night/30',
                 )}
+                style={{ width: `${hourColumnPercent}%`, minWidth: `${HOUR_COLUMN_MIN_WIDTH}px` }}
               >
                 {`${(hour % 24).toString().padStart(2, '0')}:00`}
               </div>
             ))}
           </div>
+          <div
+            className="sticky right-0 z-40 shrink-0 border-l border-border bg-background"
+            style={{ width: `${WEEK_LABEL_WIDTH}px`, minWidth: `${WEEK_LABEL_WIDTH}px` }}
+          />
+        </div>
 
-          {processedData.map((day) => {
-            const wetDiaperChanges = day.diaperChanges.filter(
-              (change) => change.type === 'WET' || change.type === 'WET_AND_DIRTY',
-            );
-            const dirtyDiaperChanges = day.diaperChanges.filter(
-              (change) => change.type === 'DIRTY' || change.type === 'WET_AND_DIRTY',
-            );
-
+        <div>
+          {weekGroups.map((group) => {
             return (
-              <div
-                key={day.date}
-                className="relative border-l border-border"
-                style={{
-                  flex: `1 0 ${DAY_COLUMN_WIDTH}px`,
-                  minWidth: `${DAY_COLUMN_WIDTH}px`,
-                }}
-              >
-                {hours.map((hour) => (
-                  <div
-                    key={hour}
-                    className={cn(
-                      'h-6 border-b border-border/50',
-                      showNightIndication && isNightHour(hour) && 'bg-baby-night/30',
-                    )}
-                  />
-                ))}
-
-                {activeOverlays.includes('naps') &&
-                  day.naps.map((nap, idx) => {
-                    const offsets = getEventOffsets(day.date, nap.start, nap.end);
-                    if (!offsets) return null;
-                    const { startOffset, endOffset, shouldFadeTop, shouldFadeBottom } = offsets;
-                    const { top, height } = positionFromOffsets(startOffset, endOffset);
+              <div key={`${group.weekLabel ?? 'no-week'}-${group.startIndex}`} className="flex border-b border-border">
+                <div className="flex-1 min-w-0">
+                  {group.days.map((day, dayIndex) => {
+                    const wetDiaperChanges = day.diaperChanges.filter(
+                      (change) => change.type === 'WET' || change.type === 'WET_AND_DIRTY',
+                    );
+                    const dirtyDiaperChanges = day.diaperChanges.filter(
+                      (change) => change.type === 'DIRTY' || change.type === 'WET_AND_DIRTY',
+                    );
 
                     return (
-                      <NapBar
-                        key={`nap-${day.date}-${idx}`}
-                        nightIndicator={showNightIndication}
-                        nap={nap}
-                        top={top}
-                        height={height ?? 0}
-                        shouldFadeBottom={shouldFadeBottom}
-                        shouldFadeTop={shouldFadeTop}
-                        formatTimestamp={formatTimestamp}
-                      />
+                      <div
+                        key={day.date}
+                        className={cn('flex min-w-0', dayIndex < group.days.length - 1 && 'border-b border-border')}
+                      >
+                        <div
+                          className="sticky left-0 z-10 flex shrink-0 flex-col justify-center border-r border-border bg-background px-3"
+                          style={{
+                            width: `${DAY_LABEL_WIDTH}px`,
+                            minWidth: `${DAY_LABEL_WIDTH}px`,
+                            height: `${DAY_ROW_HEIGHT}px`,
+                          }}
+                        >
+                          <div className="text-sm font-medium">{format(parseISO(day.date), 'EEE')}</div>
+                          <div className="text-xs text-muted-foreground">{format(parseISO(day.date), 'MMM d')}</div>
+                        </div>
+
+                        <div
+                          className="relative flex-1"
+                          style={{ minWidth: `${timelineMinWidth}px`, height: `${DAY_ROW_HEIGHT}px` }}
+                        >
+                          {hours.map((hour) => (
+                            <div
+                              key={hour}
+                              className={cn(
+                                'absolute top-0 bottom-0 border-l border-border/50',
+                                showNightIndication && isNightHour(hour) && 'bg-baby-night/30',
+                              )}
+                              style={{
+                                left: `${hour * hourColumnPercent}%`,
+                                width: `${hourColumnPercent}%`,
+                              }}
+                            />
+                          ))}
+
+                          {activeOverlays.includes('naps') &&
+                            day.naps.map((nap, idx) => {
+                              const offsets = getEventOffsets(day.date, nap.start, nap.end);
+                              if (!offsets) return null;
+                              const { startOffset, endOffset, shouldFadeStart, shouldFadeEnd } = offsets;
+                              const { left, width } = positionFromOffsets(startOffset, endOffset);
+
+                              return (
+                                <NapBar
+                                  key={`nap-${day.date}-${idx}`}
+                                  nightIndicator={showNightIndication}
+                                  nap={nap}
+                                  left={left}
+                                  width={width ?? '0%'}
+                                  shouldFadeEnd={shouldFadeEnd}
+                                  shouldFadeStart={shouldFadeStart}
+                                  formatTimestamp={formatTimestamp}
+                                />
+                              );
+                            })}
+
+                          {activeOverlays.includes('feedings') &&
+                            day.feedings.map((feeding, idx) => {
+                              const offsets = getEventOffsets(day.date, feeding.start, feeding.end);
+                              if (!offsets) return null;
+                              const { startOffset, endOffset, shouldFadeStart, shouldFadeEnd } = offsets;
+                              const { left, width } = positionFromOffsets(startOffset, endOffset);
+
+                              return (
+                                <FeedingBar
+                                  key={`feeding-${day.date}-${idx}`}
+                                  feeding={feeding}
+                                  left={left}
+                                  width={width ?? '0%'}
+                                  shouldFadeEnd={shouldFadeEnd}
+                                  shouldFadeStart={shouldFadeStart}
+                                  formatTimestamp={formatTimestamp}
+                                />
+                              );
+                            })}
+
+                          {activeOverlays.includes('wetDiapers') &&
+                            wetDiaperChanges.map((change, idx) => {
+                              const offsetMinutes = getOffsetWithinDay(day.date, change.time);
+                              if (offsetMinutes === null) return null;
+                              const { left } = positionFromOffsets(offsetMinutes);
+
+                              return (
+                                <WetDiaperIndicator
+                                  key={`wet-${day.date}-${idx}`}
+                                  time={change.time}
+                                  left={left}
+                                  formatTimestamp={formatTimestamp}
+                                />
+                              );
+                            })}
+
+                          {activeOverlays.includes('dirtyDiapers') &&
+                            dirtyDiaperChanges.map((change, idx) => {
+                              const offsetMinutes = getOffsetWithinDay(day.date, change.time);
+                              if (offsetMinutes === null) return null;
+                              const { left } = positionFromOffsets(offsetMinutes);
+
+                              return (
+                                <DirtyDiaperIndicator
+                                  key={`dirty-${day.date}-${idx}`}
+                                  time={change.time}
+                                  left={left}
+                                  formatTimestamp={formatTimestamp}
+                                />
+                              );
+                            })}
+
+                          {activeOverlays.includes('comments') &&
+                            day.comments.map((comment, idx) => {
+                              const offsetMinutes = getOffsetWithinDay(day.date, comment.time);
+                              if (offsetMinutes === null) return null;
+                              const { left } = positionFromOffsets(offsetMinutes);
+
+                              return (
+                                <CommentIndicator
+                                  key={`comment-${day.date}-${idx}`}
+                                  comment={comment}
+                                  left={left}
+                                  formatTimestamp={formatTimestamp}
+                                />
+                              );
+                            })}
+                        </div>
+                      </div>
                     );
                   })}
+                </div>
 
-                {activeOverlays.includes('feedings') &&
-                  day.feedings.map((feeding, idx) => {
-                    const offsets = getEventOffsets(day.date, feeding.start, feeding.end);
-                    if (!offsets) return null;
-                    const { startOffset, endOffset, shouldFadeTop, shouldFadeBottom } = offsets;
-                    const { top, height } = positionFromOffsets(startOffset, endOffset);
-
-                    return (
-                      <FeedingBar
-                        key={`feeding-${day.date}-${idx}`}
-                        feeding={feeding}
-                        top={top}
-                        height={height ?? 0}
-                        shouldFadeBottom={shouldFadeBottom}
-                        shouldFadeTop={shouldFadeTop}
-                        formatTimestamp={formatTimestamp}
-                      />
-                    );
-                  })}
-
-                {activeOverlays.includes('wetDiapers') &&
-                  wetDiaperChanges.map((change, idx) => {
-                    const offsetMinutes = getOffsetWithinDay(day.date, change.time);
-                    if (offsetMinutes === null) return null;
-                    const { top } = positionFromOffsets(offsetMinutes);
-
-                    return (
-                      <WetDiaperIndicator
-                        key={`wet-${day.date}-${idx}`}
-                        time={change.time}
-                        top={top}
-                        formatTimestamp={formatTimestamp}
-                      />
-                    );
-                  })}
-
-                {activeOverlays.includes('dirtyDiapers') &&
-                  dirtyDiaperChanges.map((change, idx) => {
-                    const offsetMinutes = getOffsetWithinDay(day.date, change.time);
-                    if (offsetMinutes === null) return null;
-                    const { top } = positionFromOffsets(offsetMinutes);
-
-                    return (
-                      <DirtyDiaperIndicator
-                        key={`dirty-${day.date}-${idx}`}
-                        time={change.time}
-                        top={top}
-                        formatTimestamp={formatTimestamp}
-                      />
-                    );
-                  })}
-
-                {activeOverlays.includes('comments') &&
-                  day.comments.map((comment, idx) => {
-                    const offsetMinutes = getOffsetWithinDay(day.date, comment.time);
-                    if (offsetMinutes === null) return null;
-                    const { top } = positionFromOffsets(offsetMinutes);
-
-                    return (
-                      <CommentIndicator
-                        key={`comment-${day.date}-${idx}`}
-                        comment={comment}
-                        top={top}
-                        formatTimestamp={formatTimestamp}
-                      />
-                    );
-                  })}
+                <div
+                  className={cn(
+                    'sticky right-0 z-20 flex shrink-0 items-center justify-center border-l border-border bg-background',
+                    group.weekLabel && 'bg-primary/10',
+                  )}
+                  style={{ width: `${WEEK_LABEL_WIDTH}px`, minWidth: `${WEEK_LABEL_WIDTH}px` }}
+                >
+                  {group.weekLabel ? (
+                    <div className="[writing-mode:vertical-rl] rotate-180 text-xs font-medium uppercase tracking-[0.2em] text-primary">
+                      {group.weekLabel}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             );
           })}
