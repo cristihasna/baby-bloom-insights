@@ -217,7 +217,7 @@ export function Dashboard() {
           <NapDurationChart data={data} />
           <DiaperChart data={data} />
           <FeedingChart data={data} />
-          <WakeWindowChart data={data} />
+          <WakeWindowChart data={data} birthDate={settings.birthDate} />
           <WeightChart data={data} birthDate={settings.birthDate} />
           <NightWakeUpsChart data={data} />
         </div>

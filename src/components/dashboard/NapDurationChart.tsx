@@ -1,14 +1,16 @@
 import { useMemo } from 'react';
 import {
-  LineChart,
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
   Line,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
 } from 'recharts';
+import type { TooltipProps } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { DaySummary } from '@/types/baby-log';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,31 +19,114 @@ interface NapDurationChartProps {
   data: DaySummary[];
 }
 
-export function NapDurationChart({ data }: NapDurationChartProps) {
-  const formatMinutesToHourAndMinutes = (minutes: number) => {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return `${h}h ${m}m`;
-  };
+type SleepSegmentChartPoint = {
+  date: string;
+  count: number;
+  averageDuration: number;
+  maxDuration: number;
+};
 
-  const chartData = useMemo(() => {
-    return data.map((d) => ({
-      date: format(parseISO(d.date), 'MMM d'),
-      avgDayNapDuration: d.averageDaySleepDuration,
-      avgNightSleepDuration: d.averageNightSleepDuration,
-      maxNightSleepDuration: Math.max(...d.naps.filter((n) => n.isNightSleep).map((n) => n.durationMinutes)),
-      maxDayNapDuration: Math.max(...d.naps.filter((n) => !n.isNightSleep).map((n) => n.durationMinutes)),
-    }));
-  }, [data]);
+interface SleepSegmentDurationChartProps {
+  data: SleepSegmentChartPoint[];
+  title: string;
+  averageLabel: string;
+  maxLabel: string;
+  countLabel: string;
+  durationColor: string;
+  maxColor: string;
+  countColor: string;
+}
 
+function formatMinutesToHoursAndMinutes(minutes: number) {
+  const safeMinutes = Number.isFinite(minutes) ? Math.max(0, minutes) : 0;
+  const hours = Math.floor(safeMinutes / 60);
+  const remainingMinutes = safeMinutes % 60;
+
+  if (remainingMinutes === 0) {
+    return `${hours}h`;
+  }
+
+  return `${hours}h ${remainingMinutes}m`;
+}
+
+function formatDurationAxisTick(minutes: number) {
+  if (minutes === 0) {
+    return '0m';
+  }
+
+  if (minutes < 60) {
+    return `${minutes}m`;
+  }
+
+  const hours = minutes / 60;
+  return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+}
+
+function SleepSegmentTooltip({
+  active,
+  payload,
+  label,
+  averageLabel,
+  maxLabel,
+  countLabel,
+  durationColor,
+  maxColor,
+  countColor,
+}: TooltipProps<number, string> & {
+  averageLabel: string;
+  maxLabel: string;
+  countLabel: string;
+  durationColor: string;
+  maxColor: string;
+  countColor: string;
+}) {
+  if (!active || !payload || payload.length === 0) {
+    return null;
+  }
+
+  const point = payload[0]?.payload as SleepSegmentChartPoint | undefined;
+
+  if (!point) {
+    return null;
+  }
+
+  return (
+    <div
+      className="rounded-xl border bg-card p-3 shadow-sm"
+      style={{ borderColor: 'hsl(var(--border))' }}
+    >
+      <p className="mb-2 font-medium text-foreground">{point.date ?? String(label)}</p>
+      <p className="text-sm" style={{ color: durationColor }}>
+        {averageLabel} : {formatMinutesToHoursAndMinutes(point.averageDuration)}
+      </p>
+      <p className="text-sm" style={{ color: maxColor }}>
+        {maxLabel} : {formatMinutesToHoursAndMinutes(point.maxDuration)}
+      </p>
+      <p className="text-sm" style={{ color: countColor }}>
+        {countLabel} : {point.count}
+      </p>
+    </div>
+  );
+}
+
+function SleepSegmentDurationChart({
+  data,
+  title,
+  averageLabel,
+  maxLabel,
+  countLabel,
+  durationColor,
+  maxColor,
+  countColor,
+}: SleepSegmentDurationChartProps) {
   return (
     <Card className="rounded-2xl">
       <CardHeader>
-        <CardTitle className="text-lg">Sleep Duration & Sessions</CardTitle>
+        <CardTitle className="text-lg">{title}</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={chartData}>
+        <ResponsiveContainer width="100%" height={220}>
+          <ComposedChart data={data}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis
               dataKey="date"
@@ -50,84 +135,121 @@ export function NapDurationChart({ data }: NapDurationChartProps) {
               interval="preserveStartEnd"
             />
             <YAxis
-              yAxisId="left"
+              yAxisId="duration"
               tick={{ fontSize: 12 }}
               className="fill-muted-foreground"
-              tickFormatter={(v) => `${v}m`}
+              tickFormatter={formatDurationAxisTick}
             />
             <YAxis
-              yAxisId="right"
+              yAxisId="count"
               orientation="right"
+              allowDecimals={false}
               tick={{ fontSize: 12 }}
               className="fill-muted-foreground"
-              tickFormatter={(v) => `${v}`}
+              tickFormatter={(value) => `${value}`}
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '0.75rem',
-              }}
-              formatter={(value: number, name: string) => {
-                if (name === 'maxDayNapDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Max Day Sleep'];
-                if (name === 'maxNightSleepDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Max Night Sleep'];
-                if (name === 'avgNightSleepDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Avg Night Sleep'];
-                if (name === 'avgDayNapDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Avg Day Sleep'];
-                if (name === 'daySessions') return [`${value} sessions`, 'Day Sessions'];
-                if (name === 'nightSessions') return [`${value} sessions`, 'Night Sessions'];
-                return [value, name];
-              }}
+              content={(
+                <SleepSegmentTooltip
+                  averageLabel={averageLabel}
+                  maxLabel={maxLabel}
+                  countLabel={countLabel}
+                  durationColor={durationColor}
+                  maxColor={maxColor}
+                  countColor={countColor}
+                />
+              )}
             />
-            <Legend
-              formatter={(value) => {
-                if (value === 'maxDayNapDuration') return 'Max Day Sleep';
-                if (value === 'maxNightSleepDuration') return 'Max Night Sleep';
-                if (value === 'avgNightSleepDuration') return 'Avg Night Sleep';
-                if (value === 'avgDayNapDuration') return 'Avg Day Sleep';
-                if (value === 'daySessions') return 'Day Sessions';
-                if (value === 'nightSessions') return 'Night Sessions';
-                return value;
-              }}
+            <Legend />
+            <Bar
+              yAxisId="count"
+              dataKey="count"
+              name={countLabel}
+              fill={countColor}
+              fillOpacity={0.15}
             />
             <Line
-              yAxisId="left"
+              yAxisId="duration"
               type="monotone"
-              dataKey="maxDayNapDuration"
-              name="maxDayNapDuration"
-              stroke="hsl(var(--baby-mint))"
+              dataKey="averageDuration"
+              name={averageLabel}
+              stroke={durationColor}
               strokeWidth={2}
-              dot={{ fill: 'hsl(var(--baby-mint))', strokeWidth: 0, r: 3 }}
+              dot={{ fill: durationColor, strokeWidth: 0, r: 3 }}
+              activeDot={{ r: 5 }}
             />
             <Line
-              yAxisId="left"
+              yAxisId="duration"
               type="monotone"
-              dataKey="avgDayNapDuration"
-              name="avgDayNapDuration"
-              stroke="hsl(var(--baby-feeding))"
+              dataKey="maxDuration"
+              name={maxLabel}
+              stroke={maxColor}
+              strokeDasharray="2 4"
               strokeWidth={2}
-              dot={{ fill: 'hsl(var(--baby-feeding))', strokeWidth: 0, r: 3 }}
+              dot={{ fill: maxColor, strokeWidth: 0, r: 3 }}
+              activeDot={{ r: 5 }}
             />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="avgNightSleepDuration"
-              name="avgNightSleepDuration"
-              stroke="hsl(var(--baby-sleep))"
-              strokeWidth={2}
-              dot={{ fill: 'hsl(var(--baby-sleep))', strokeWidth: 0, r: 3 }}
-            />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="maxNightSleepDuration"
-              name="maxNightSleepDuration"
-              stroke="hsl(var(--baby-dirty))"
-              strokeWidth={2}
-              dot={{ fill: 'hsl(var(--baby-dirty))', strokeWidth: 0, r: 3 }}
-            />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>
+  );
+}
+
+export function NapDurationChart({ data }: NapDurationChartProps) {
+  const { dayNapData, nightSleepData } = useMemo(() => {
+    const getMaxDuration = (durations: number[]) => (durations.length > 0 ? Math.max(...durations) : 0);
+
+    return {
+      dayNapData: data.map((day) => {
+        const dayNapDurations = day.naps
+          .filter((nap) => !nap.isNightSleep)
+          .map((nap) => nap.durationMinutes);
+
+        return {
+          date: format(parseISO(day.date), 'MMM d'),
+          count: dayNapDurations.length,
+          averageDuration: day.averageDaySleepDuration,
+          maxDuration: getMaxDuration(dayNapDurations),
+        };
+      }),
+      nightSleepData: data.map((day) => {
+        const nightSleepDurations = day.naps
+          .filter((nap) => nap.isNightSleep)
+          .map((nap) => nap.durationMinutes);
+
+        return {
+          date: format(parseISO(day.date), 'MMM d'),
+          count: nightSleepDurations.length,
+          averageDuration: day.averageNightSleepDuration,
+          maxDuration: getMaxDuration(nightSleepDurations),
+        };
+      }),
+    };
+  }, [data]);
+
+  return (
+    <div className="grid gap-6">
+      <SleepSegmentDurationChart
+        data={dayNapData}
+        title="Day Naps"
+        averageLabel="Average Nap Length"
+        maxLabel="Longest Nap"
+        countLabel="Nap Count"
+        durationColor="hsl(var(--baby-feeding))"
+        maxColor="hsl(var(--baby-dirty))"
+        countColor="hsl(var(--baby-feeding))"
+      />
+      <SleepSegmentDurationChart
+        data={nightSleepData}
+        title="Night Sleep Segments"
+        averageLabel="Average Segment Length"
+        maxLabel="Longest Segment"
+        countLabel="Segment Count"
+        durationColor="hsl(var(--baby-sleep))"
+        maxColor="hsl(var(--baby-dirty))"
+        countColor="hsl(var(--baby-sleep))"
+      />
+    </div>
   );
 }
