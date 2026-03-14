@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
+import type { TooltipProps } from 'recharts';
 import { differenceInDays, differenceInWeeks, format, parseISO } from 'date-fns';
 import { DaySummary } from '@/types/baby-log';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,6 +78,60 @@ interface WeightChartProps {
 }
 
 export function WeightChart({ data, birthDate }: WeightChartProps) {
+  const WeightTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
+    if (!active || !payload || payload.length === 0) {
+      return null;
+    }
+
+    const point = payload[0]?.payload as
+      | {
+          date: string | null;
+          week: string;
+          ageDays: number | null;
+          weight?: number;
+          referenceWeight?: number;
+          referenceLower?: number;
+          referenceUpper?: number;
+        }
+      | undefined;
+
+    if (!point) {
+      return null;
+    }
+
+    const title = point.ageDays !== null && point.date
+      ? `${point.week} • ${format(parseISO(point.date), 'MMM d, yyyy')}`
+      : point.ageDays !== null
+        ? point.week
+        : point.date
+          ? format(parseISO(point.date), 'MMM d, yyyy')
+          : String(label);
+
+    return (
+      <div
+        className="rounded-xl border bg-card p-3 shadow-sm"
+        style={{ borderColor: 'hsl(var(--border))' }}
+      >
+        <p className="mb-2 font-medium text-foreground">{title}</p>
+        {point.weight !== undefined ? (
+          <p className="text-sm" style={{ color: 'hsl(var(--baby-mint))' }}>
+            Actual weight : {point.weight.toFixed(2)} kg
+          </p>
+        ) : null}
+        {point.referenceWeight !== undefined ? (
+          <p className="text-sm" style={{ color: 'hsl(var(--baby-sleep))' }}>
+            WHO median (boys) : {point.referenceWeight.toFixed(2)} kg
+          </p>
+        ) : null}
+        {point.referenceLower !== undefined && point.referenceUpper !== undefined ? (
+          <p className="text-sm" style={{ color: 'hsl(var(--baby-sleep))' }}>
+            WHO range (5th-95th) : {point.referenceLower.toFixed(2)}-{point.referenceUpper.toFixed(2)} kg
+          </p>
+        ) : null}
+      </div>
+    );
+  };
+
   const chartData = useMemo(() => {
     const weightEntries = data
       .filter((d) => d.weight !== undefined)
@@ -181,35 +236,7 @@ export function WeightChart({ data, birthDate }: WeightChartProps) {
               tickFormatter={(value) => `${value}kg`}
             />
             <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '0.75rem',
-              }}
-              labelFormatter={(value, payload) => {
-                const point = payload?.[0]?.payload as
-                  | { date: string | null; week: string; ageDays: number | null }
-                  | undefined;
-
-                if (!point) return String(value);
-
-                if (point.ageDays !== null && point.date) {
-                  return `${point.week} • ${format(parseISO(point.date), 'MMM d, yyyy')}`;
-                }
-
-                if (point.ageDays !== null) {
-                  return point.week;
-                }
-
-                return point.date ? format(parseISO(point.date), 'MMM d, yyyy') : String(value);
-              }}
-              formatter={(value: number, name: string) => {
-                if (name === 'referenceWeight') return [`${value.toFixed(2)} kg`, 'WHO median (boys)'];
-                if (name === 'referenceLower') return [`${value.toFixed(2)} kg`, 'WHO lower bound'];
-                if (name === 'referenceUpper') return [`${value.toFixed(2)} kg`, 'WHO upper bound'];
-                if (name === 'weight') return [`${value.toFixed(2)} kg`, 'Actual weight'];
-                if (name === 'referenceBand') return [];
-              }}
+              content={<WeightTooltip />}
             />
             <Legend
               formatter={(value) => {

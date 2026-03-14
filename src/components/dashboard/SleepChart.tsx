@@ -1,38 +1,119 @@
 import { useMemo } from 'react';
 import {
-  BarChart,
+  ComposedChart,
   Bar,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
   Legend,
-  LineChart,
-  Line,
 } from 'recharts';
-import { format, parseISO } from 'date-fns';
+import type { TooltipProps } from 'recharts';
+import { differenceInDays, format, parseISO } from 'date-fns';
 import { DaySummary } from '@/types/baby-log';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface SleepChartProps {
   data: DaySummary[];
+  birthDate: string | null;
 }
 
-export function SleepChart({ data }: SleepChartProps) {
+function getRecommendedSleepRangeMinutes(ageDays: number) {
+  if (ageDays <= 90) {
+    return { min: 14 * 60, max: 17 * 60 };
+  }
+
+  if (ageDays <= 365) {
+    return { min: 12 * 60, max: 16 * 60 };
+  }
+
+  return { min: 11 * 60, max: 14 * 60 };
+}
+
+export function SleepChart({ data, birthDate }: SleepChartProps) {
   const formatMinutesToHourAndMinutes = (minutes: number) => {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
     return `${h}h ${m}m`;
   };
+
+  const formatMinutesToHours = (minutes: number) => {
+    const hours = minutes / 60;
+    return Number.isInteger(hours) ? `${hours}h` : `${hours.toFixed(1)}h`;
+  };
+
+  const SleepTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
+    if (!active || !payload || payload.length === 0) {
+      return null;
+    }
+
+    const point = payload[0]?.payload as
+      | {
+          date?: string;
+          dayHours?: number;
+          nightHours?: number;
+          totalHours?: number;
+          recommendedMin?: number;
+          recommendedBand?: number;
+        }
+      | undefined;
+
+    if (!point) {
+      return null;
+    }
+
+    const recommendedMax =
+      point.recommendedMin !== undefined && point.recommendedBand !== undefined
+        ? point.recommendedMin + point.recommendedBand
+        : undefined;
+
+    return (
+      <div
+        className="rounded-xl border bg-card p-3 shadow-sm"
+        style={{ borderColor: 'hsl(var(--border))' }}
+      >
+        <p className="mb-2 font-medium text-foreground">
+          {point.date ?? String(label)}
+          {recommendedMax !== undefined
+            ? ` • Recommended ${formatMinutesToHours(point.recommendedMin!)}-${formatMinutesToHours(recommendedMax)}`
+            : ''}
+        </p>
+        {point.totalHours !== undefined ? (
+          <p className="text-sm" style={{ color: 'hsl(var(--foreground))' }}>
+            Total Sleep : {formatMinutesToHourAndMinutes(point.totalHours)}
+          </p>
+        ) : null}
+        {point.dayHours !== undefined ? (
+          <p className="text-sm" style={{ color: 'hsl(var(--baby-feeding))' }}>
+            Day Sleep : {formatMinutesToHourAndMinutes(point.dayHours)}
+          </p>
+        ) : null}
+        {point.nightHours !== undefined ? (
+          <p className="text-sm" style={{ color: 'hsl(var(--baby-sleep))' }}>
+            Night Sleep : {formatMinutesToHourAndMinutes(point.nightHours)}
+          </p>
+        ) : null}
+      </div>
+    );
+  };
+
   const chartData = useMemo(() => {
-    return data.map((d) => ({
-      date: format(parseISO(d.date), 'MMM d'),
-      dayHours: d.totalDaySleepTime,
-      nightHours: d.totalNightSleepTime24h,
-      totalHours: d.totalSleepTime24h,
-    }));
-  }, [data]);
+    return data.map((d) => {
+      const ageDays = birthDate ? Math.max(differenceInDays(parseISO(d.date), parseISO(birthDate)), 0) : null;
+      const reference = ageDays !== null ? getRecommendedSleepRangeMinutes(ageDays) : null;
+
+      return {
+        date: format(parseISO(d.date), 'MMM d'),
+        dayHours: d.totalDaySleepTime,
+        nightHours: d.totalNightSleepTime24h,
+        totalHours: d.totalSleepTime24h,
+        recommendedMin: reference?.min,
+        recommendedBand: reference ? reference.max - reference.min : undefined,
+      };
+    });
+  }, [birthDate, data]);
 
   return (
     <Card className="rounded-2xl">
@@ -40,67 +121,8 @@ export function SleepChart({ data }: SleepChartProps) {
         <CardTitle className="text-lg">Day vs Night Sleep</CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-            <XAxis
-              dataKey="date"
-              tick={{ fontSize: 10 }}
-              className="fill-muted-foreground"
-              interval="preserveStartEnd"
-            />
-            <YAxis tick={{ fontSize: 12 }} className="fill-muted-foreground" tickFormatter={(v) => `${v}h`} />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '0.75rem',
-              }}
-              formatter={(value: number, name: string) => [
-                `${formatMinutesToHourAndMinutes(value)}`,
-                name === 'dayHours' ? 'Day Sleep' : 'Night Sleep',
-              ]}
-            />
-            <Legend formatter={(value) => (value === 'dayHours' ? 'Day Sleep' : 'Night Sleep')} />
-            <Bar dataKey="dayHours" name="dayHours" stackId="a" fill="hsl(var(--baby-feeding))" radius={[0, 0, 0, 0]} />
-            <Bar
-              dataKey="nightHours"
-              name="nightHours"
-              stackId="a"
-              fill="hsl(var(--baby-sleep))"
-              radius={[4, 4, 0, 0]}
-            />
-          </BarChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
-  );
-}
-
-export function NapDurationChart({ data }: SleepChartProps) {
-  const formatMinutesToHourAndMinutes = (minutes: number) => {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return `${h}h ${m}m`;
-  };
-  const chartData = useMemo(() => {
-    return data.map((d) => ({
-      date: format(parseISO(d.date), 'MMM d'),
-      avgDayNapDuration: d.averageDaySleepDuration,
-      avgNightSleepDuration: d.averageNightSleepDuration,
-      maxNightSleepDuration: Math.max(...d.naps.filter((n) => n.isNightSleep).map((n) => n.durationMinutes)),
-      maxDayNapDuration: Math.max(...d.naps.filter((n) => !n.isNightSleep).map((n) => n.durationMinutes)),
-    }));
-  }, [data]);
-
-  return (
-    <Card className="rounded-2xl">
-      <CardHeader>
-        <CardTitle className="text-lg">Sleep Duration & Sessions</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={chartData}>
+        <ResponsiveContainer width="100%" height={240}>
+          <ComposedChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
             <XAxis
               dataKey="date"
@@ -109,82 +131,54 @@ export function NapDurationChart({ data }: SleepChartProps) {
               interval="preserveStartEnd"
             />
             <YAxis
-              yAxisId="left"
               tick={{ fontSize: 12 }}
               className="fill-muted-foreground"
-              tickFormatter={(v) => `${v}m`}
+              tickFormatter={(v) => formatMinutesToHours(v)}
             />
-            <YAxis
-              yAxisId="right"
-              orientation="right"
-              tick={{ fontSize: 12 }}
-              className="fill-muted-foreground"
-              tickFormatter={(v) => `${v}`}
-            />
+            {birthDate ? (
+              <>
+                <Area
+                  type="monotone"
+                  dataKey="recommendedMin"
+                  stackId="sleep-range"
+                  stroke="none"
+                  fill="transparent"
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="recommendedBand"
+                  name="recommendedBand"
+                  stackId="sleep-range"
+                  stroke="none"
+                  fill="hsl(var(--baby-sleep))"
+                  fillOpacity={0.12}
+                  activeDot={false}
+                  isAnimationActive={false}
+                />
+              </>
+            ) : null}
             <Tooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--card))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: '0.75rem',
-              }}
-              formatter={(value: number, name: string) => {
-                if (name === 'maxDayNapDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Max Day Sleep'];
-                if (name === 'maxNightSleepDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Max Night Sleep'];
-                if (name === 'avgNightSleepDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Avg Night Sleep'];
-                if (name === 'avgDayNapDuration') return [`${formatMinutesToHourAndMinutes(value)}`, 'Avg Day Sleep'];
-                if (name === 'daySessions') return [`${value} sessions`, 'Day Sessions'];
-                if (name === 'nightSessions') return [`${value} sessions`, 'Night Sessions'];
-                return [value, name];
-              }}
+              content={<SleepTooltip />}
             />
             <Legend
               formatter={(value) => {
-                if (value === 'maxDayNapDuration') return 'Max Day Sleep';
-                if (value === 'maxNightSleepDuration') return 'Max Night Sleep';
-                if (value === 'avgNightSleepDuration') return 'Avg Night Sleep';
-                if (value === 'avgDayNapDuration') return 'Avg Day Sleep';
-                if (value === 'daySessions') return 'Day Sessions';
-                if (value === 'nightSessions') return 'Night Sessions';
+                if (value === 'recommendedBand') return 'Recommended sleep range';
+                if (value === 'dayHours') return 'Day Sleep';
+                if (value === 'nightHours') return 'Night Sleep';
                 return value;
               }}
             />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="maxDayNapDuration"
-              name="maxDayNapDuration"
-              stroke="hsl(var(--baby-mint))"
-              strokeWidth={2}
-              dot={{ fill: 'hsl(var(--baby-mint))', strokeWidth: 0, r: 3 }}
+            <Bar dataKey="dayHours" name="dayHours" stackId="sleep" fill="hsl(var(--baby-feeding))" radius={[0, 0, 0, 0]} />
+            <Bar
+              dataKey="nightHours"
+              name="nightHours"
+              stackId="sleep"
+              fill="hsl(var(--baby-sleep))"
+              radius={[4, 4, 0, 0]}
             />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="avgDayNapDuration"
-              name="avgDayNapDuration"
-              stroke="hsl(var(--baby-feeding))"
-              strokeWidth={2}
-              dot={{ fill: 'hsl(var(--baby-feeding))', strokeWidth: 0, r: 3 }}
-            />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="avgNightSleepDuration"
-              name="avgNightSleepDuration"
-              stroke="hsl(var(--baby-sleep))"
-              strokeWidth={2}
-              dot={{ fill: 'hsl(var(--baby-sleep))', strokeWidth: 0, r: 3 }}
-            />
-            <Line
-              yAxisId="left"
-              type="monotone"
-              dataKey="maxNightSleepDuration"
-              name="maxNightSleepDuration"
-              stroke="hsl(var(--baby-dirty))"
-              strokeWidth={2}
-              dot={{ fill: 'hsl(var(--baby-dirty))', strokeWidth: 0, r: 3 }}
-            />
-          </LineChart>
+          </ComposedChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>

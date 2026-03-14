@@ -15,7 +15,8 @@ import { DailyTimeline } from './DailyTimeline';
 import { OverlayToggle } from './OverlayToggle';
 import { WeightChart } from './WeightChart';
 import { DiaperChart } from './DiaperChart';
-import { SleepChart, NapDurationChart } from './SleepChart';
+import { SleepChart } from './SleepChart';
+import { NapDurationChart } from './NapDurationChart';
 import { InsightsCards } from './InsightsCards';
 import { NightWakeUpsChart } from './NightWakeUpsChart';
 import { FeedingChart } from './FeedingChart';
@@ -212,7 +213,7 @@ export function Dashboard() {
 
         {/* Charts Grid */}
         <div className="grid gap-6">
-          <SleepChart data={data} />
+          <SleepChart data={data} birthDate={settings.birthDate} />
           <NapDurationChart data={data} />
           <DiaperChart data={data} />
           <FeedingChart data={data} />
