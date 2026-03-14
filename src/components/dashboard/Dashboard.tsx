@@ -211,7 +211,7 @@ export function Dashboard() {
         </Card>
 
         {/* Charts Grid */}
-        <div className="grid md:grid-cols-2 gap-6">
+        <div className="grid gap-6">
           <SleepChart data={data} />
           <NapDurationChart data={data} />
           <DiaperChart data={data} />
